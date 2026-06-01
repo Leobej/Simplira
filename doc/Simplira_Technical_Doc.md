@@ -114,20 +114,29 @@ Permission resolution logic:
 |---|---|
 | Backend | Java Spring Boot |
 | Frontend | React |
-| Database | PostgreSQL (via Spring Data JPA) |
+| Database | PostgreSQL 18 (via Spring Data JPA) |
 | Message Broker | RabbitMQ |
 | WebSocket Protocol | STOMP over WebSocket (via RabbitMQ relay) |
 | Object Storage | AWS S3 or Cloudflare R2 (image attachments) |
 | DB Migrations | Flyway |
 | Local Dev | Docker Compose |
+| DB Admin UI | pgAdmin 4 (browser-based, http://localhost:5050) |
 | Authentication | JWT (Access + Refresh token strategy) |
 
 ### Docker Compose (Local Development)
 
+> **Note:** PostgreSQL 18+ changed the data directory structure. The volume must be mounted at
+> `/var/lib/postgresql` (not `/var/lib/postgresql/data` as in older versions) to avoid
+> initialization errors on first run.
+
+> **Note:** If you have a local PostgreSQL installation running on port 5432, stop it before
+> starting Docker Compose to avoid port conflicts.
+> Windows: `net stop postgresql-x64-18`
+
 ```yaml
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18
     ports:
       - "5432:5432"
     environment:
@@ -135,7 +144,7 @@ services:
       POSTGRES_USER: simplira
       POSTGRES_PASSWORD: simplira
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql  # note: /var/lib/postgresql, not /data — required for Postgres 18+
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -152,9 +161,48 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  pgadmin:
+    image: dpage/pgadmin4
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@simplira.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+
 volumes:
   postgres_data:
   rabbitmq_data:
+```
+
+### pgAdmin Setup
+
+After running `docker compose up -d`, open `http://localhost:5050` in the browser.
+
+Login with:
+- **Email:** admin@simplira.com
+- **Password:** admin
+
+Register the server:
+- Right click **Servers** → **Register** → **Server**
+- **General tab** → Name: `Simplira`
+- **Connection tab:**
+  - Host: `postgres` (Docker service name — not localhost)
+  - Port: `5432`
+  - Database: `simplira`
+  - Username: `simplira`
+  - Password: `simplira`
+
+### Verifying Flyway Migrations
+
+To check which migrations have run, connect via pgAdmin or directly inside the container:
+
+```bash
+docker exec -it docker-postgres-1 psql -U simplira -d simplira
+```
+
+Then:
+```sql
+SELECT * FROM flyway_schema_history;
 ```
 
 ---
