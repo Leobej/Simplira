@@ -1,4 +1,4 @@
-package com.simplira.Simplira;
+package com.simplira.simplira;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
