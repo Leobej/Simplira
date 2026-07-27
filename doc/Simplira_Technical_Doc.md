@@ -17,6 +17,7 @@
 8. [WebSocket & Real-Time](#8-websocket--real-time)
 9. [Spring Boot Project Structure](#9-spring-boot-project-structure)
 10. [Key Architectural Patterns](#10-key-architectural-patterns)
+    11–36. Frontend, Android, Testing, CI/CD, and later design decisions — see section headers.
 
 ---
 
@@ -252,6 +253,18 @@ domain       → infrastructure ❌ FORBIDDEN
 
 ## 4. Database Schema
 
+> **Reading note — this is the original design.** Several columns and tables were added or
+> changed in later sections; where they differ, the later section wins:
+> - Issue `status` enum → `status_id` FK to IssueStatus (§33)
+> - Project `key`, Issue `number` for human identifiers (§24)
+> - Workspace / Project / IssueType / Label soft-delete columns (§21, §32)
+> - User `email_verified` + EmailVerificationToken (table below; flow in §6)
+> - Issue `version` for optimistic locking (§36)
+>
+> **Timezone convention:** every `TIMESTAMP` column in this document is created as `TIMESTAMPTZ`
+> (timestamp *with* time zone). Plain `timestamp` is never used — it drops offset information and
+> corrupts cross-timezone ordering. Store UTC, render per-user on the client.
+
 ### User
 
 ```sql
@@ -261,8 +274,9 @@ User
 - password          VARCHAR, NOT NULL              -- hashed
 - full_name         VARCHAR, NOT NULL
 - avatar_url        VARCHAR, nullable
-- created_at        TIMESTAMP, NOT NULL
-- updated_at        TIMESTAMP, NOT NULL
+- email_verified    BOOLEAN, NOT NULL, DEFAULT false
+- created_at        TIMESTAMPTZ, NOT NULL
+- updated_at        TIMESTAMPTZ, NOT NULL
 ```
 
 ### RefreshToken
@@ -274,9 +288,23 @@ RefreshToken
 - token_hash        VARCHAR, NOT NULL              -- hashed, not plain text
 - device_info       VARCHAR, nullable
 - ip_address        VARCHAR, nullable
-- expires_at        TIMESTAMP, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
-- revoked_at        TIMESTAMP, nullable            -- null = still valid
+- expires_at        TIMESTAMPTZ, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
+- revoked_at        TIMESTAMPTZ, nullable            -- null = still valid
+
+UNIQUE (token_hash)
+```
+
+### EmailVerificationToken
+
+```sql
+EmailVerificationToken
+- id                UUID, PK
+- user_id           UUID, FK → User, NOT NULL
+- token_hash        VARCHAR, NOT NULL              -- hashed, single-use
+- expires_at        TIMESTAMPTZ, NOT NULL            -- 24 hours default
+- consumed_at       TIMESTAMPTZ, nullable            -- null = unused
+- created_at        TIMESTAMPTZ, NOT NULL
 
 UNIQUE (token_hash)
 ```
@@ -289,8 +317,8 @@ Workspace
 - name              VARCHAR, NOT NULL
 - slug              VARCHAR, UNIQUE, NOT NULL      -- e.g. "acme-tech"
 - owner_id          UUID, FK → User, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
-- updated_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
+- updated_at        TIMESTAMPTZ, NOT NULL
 ```
 
 ### UserWorkspace
@@ -301,7 +329,7 @@ UserWorkspace
 - user_id           UUID, FK → User, NOT NULL
 - workspace_id      UUID, FK → Workspace, NOT NULL
 - role              ENUM(ADMIN, TEAM_LEADER, DEVELOPER), NOT NULL
-- joined_at         TIMESTAMP, NOT NULL
+- joined_at         TIMESTAMPTZ, NOT NULL
 - invited_by        UUID, FK → User, nullable
 
 UNIQUE (user_id, workspace_id)
@@ -314,11 +342,12 @@ Project
 - id                UUID, PK
 - workspace_id      UUID, FK → Workspace, NOT NULL
 - name              VARCHAR, NOT NULL
+- key               VARCHAR(10), NOT NULL                -- e.g. "SIMP"; UNIQUE per workspace (§24)
 - description       TEXT, nullable
 - visibility        ENUM(PUBLIC, PRIVATE), NOT NULL
 - created_by        UUID, FK → User, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
-- updated_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
+- updated_at        TIMESTAMPTZ, NOT NULL
 ```
 
 ### ProjectMember
@@ -329,7 +358,7 @@ ProjectMember
 - project_id        UUID, FK → Project, NOT NULL
 - user_id           UUID, FK → User, NOT NULL
 - role              ENUM(TEAM_LEADER, DEVELOPER), NOT NULL  -- Admin excluded (workspace-wide)
-- added_at          TIMESTAMP, NOT NULL
+- added_at          TIMESTAMPTZ, NOT NULL
 
 UNIQUE (project_id, user_id)
 ```
@@ -345,8 +374,8 @@ Sprint
 - start_date        DATE, NOT NULL
 - end_date          DATE, NOT NULL
 - created_by        UUID, FK → User, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
-- updated_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
+- updated_at        TIMESTAMPTZ, NOT NULL
 ```
 
 > Only one ACTIVE sprint per project enforced at service layer.
@@ -361,7 +390,7 @@ IssueType
 - icon              VARCHAR, nullable
 - color             VARCHAR, nullable              -- hex code
 - is_default        BOOLEAN, NOT NULL, DEFAULT false
-- created_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
 
 UNIQUE (project_id, name)
 ```
@@ -379,19 +408,23 @@ Issue
 - type_id           UUID, FK → IssueType, NOT NULL
 - title             VARCHAR, NOT NULL
 - description       TEXT, nullable
-- status            ENUM(TODO, IN_PROGRESS, DONE), NOT NULL
+- status_id         UUID, FK → IssueStatus, NOT NULL     -- replaces old status enum (§33)
 - priority          ENUM(LOW, MEDIUM, HIGH, CRITICAL), NOT NULL
 - is_blocked        BOOLEAN, NOT NULL, DEFAULT false    -- auto-managed by service layer
 - blocked_reason    TEXT, nullable
 - reporter_id       UUID, FK → User, NOT NULL
 - closed_by         UUID, FK → User, nullable
-- closed_at         TIMESTAMP, nullable
+- closed_at         TIMESTAMPTZ, nullable
 - due_date          DATE, nullable
+- number            INTEGER, NOT NULL                   -- per-project sequence; identifier = key + '-' + number (§24)
 - backlog_position  FLOAT, nullable
 - sprint_position   FLOAT, nullable
-- created_at        TIMESTAMP, NOT NULL
-- updated_at        TIMESTAMP, NOT NULL
-- deleted_at        TIMESTAMP, nullable                 -- soft delete
+- version           BIGINT, NOT NULL, DEFAULT 0          -- optimistic locking / @Version (§36)
+- created_at        TIMESTAMPTZ, NOT NULL
+- updated_at        TIMESTAMPTZ, NOT NULL
+- deleted_at        TIMESTAMPTZ, nullable                 -- soft delete
+
+UNIQUE (project_id, number)
 ```
 
 > Subtask constraint: parent_id can only reference issues where parent_id IS NULL.
@@ -405,7 +438,7 @@ IssueAssignee
 - id                UUID, PK
 - issue_id          UUID, FK → Issue, NOT NULL
 - user_id           UUID, FK → User, NOT NULL
-- assigned_at       TIMESTAMP, NOT NULL
+- assigned_at       TIMESTAMPTZ, NOT NULL
 - assigned_by       UUID, FK → User, NOT NULL
 
 UNIQUE (issue_id, user_id)
@@ -420,7 +453,7 @@ IssueLink
 - target_issue_id   UUID, FK → Issue, NOT NULL
 - link_type         ENUM(RELATED_TO, DUPLICATE_OF, BLOCKS, DEPENDS_ON), NOT NULL
 - created_by        UUID, FK → User, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
 
 UNIQUE (source_issue_id, target_issue_id, link_type)
 CHECK (source_issue_id <> target_issue_id)
@@ -443,9 +476,9 @@ Comment
 - issue_id          UUID, FK → Issue, NOT NULL
 - author_id         UUID, FK → User, NOT NULL
 - content           TEXT, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
-- updated_at        TIMESTAMP, NOT NULL
-- deleted_at        TIMESTAMP, nullable            -- soft delete
+- created_at        TIMESTAMPTZ, NOT NULL
+- updated_at        TIMESTAMPTZ, NOT NULL
+- deleted_at        TIMESTAMPTZ, nullable            -- soft delete
 ```
 
 ### CommentMention
@@ -455,7 +488,7 @@ CommentMention
 - id                UUID, PK
 - comment_id        UUID, FK → Comment, NOT NULL
 - mentioned_user_id UUID, FK → User, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
 
 UNIQUE (comment_id, mentioned_user_id)
 ```
@@ -472,7 +505,7 @@ Label
 - name              VARCHAR, NOT NULL
 - color             VARCHAR, NOT NULL              -- hex code e.g. #FF5733
 - created_by        UUID, FK → User, NOT NULL
-- created_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
 
 UNIQUE (project_id, name)
 ```
@@ -498,8 +531,8 @@ Attachment
 - file_url          VARCHAR, NOT NULL              -- points to object storage
 - file_size         BIGINT, NOT NULL               -- bytes
 - mime_type         VARCHAR, NOT NULL              -- images only (enforced in service)
-- created_at        TIMESTAMP, NOT NULL
-- deleted_at        TIMESTAMP, nullable            -- soft delete
+- created_at        TIMESTAMPTZ, NOT NULL
+- deleted_at        TIMESTAMPTZ, nullable            -- soft delete
 - deleted_by        UUID, FK → User, nullable
 ```
 
@@ -514,10 +547,10 @@ Invitation
 - invited_by        UUID, FK → User, NOT NULL
 - token             VARCHAR, UNIQUE, NOT NULL      -- sent in invitation email URL
 - status            ENUM(PENDING, ACCEPTED, EXPIRED), NOT NULL
-- expires_at        TIMESTAMP, NOT NULL            -- 7 days default
+- expires_at        TIMESTAMPTZ, NOT NULL            -- 7 days default
 - accepted_by       UUID, FK → User, nullable
-- accepted_at       TIMESTAMP, nullable
-- created_at        TIMESTAMP, NOT NULL
+- accepted_at       TIMESTAMPTZ, nullable
+- created_at        TIMESTAMPTZ, NOT NULL
 ```
 
 ### Notification
@@ -536,9 +569,9 @@ Notification
 - title             VARCHAR, NOT NULL              -- pre-rendered
 - body              TEXT, nullable                 -- pre-rendered
 - is_read           BOOLEAN, NOT NULL, DEFAULT false
-- read_at           TIMESTAMP, nullable
-- created_at        TIMESTAMP, NOT NULL
-- expires_at        TIMESTAMP, NOT NULL            -- 90 days from created_at
+- read_at           TIMESTAMPTZ, nullable
+- created_at        TIMESTAMPTZ, NOT NULL
+- expires_at        TIMESTAMPTZ, NOT NULL            -- 90 days from created_at
 ```
 
 ### NotificationPreference
@@ -551,7 +584,7 @@ NotificationPreference
 - action            ENUM(same as Notification.action), NOT NULL
 - in_app            BOOLEAN, NOT NULL, DEFAULT true
 - email             BOOLEAN, NOT NULL, DEFAULT true
-- updated_at        TIMESTAMP, NOT NULL
+- updated_at        TIMESTAMPTZ, NOT NULL
 
 UNIQUE (user_id, workspace_id, action)
 ```
@@ -572,7 +605,7 @@ AuditLog
                          SPRINT_CLOSED, ISSUE_CLOSED), NOT NULL
 - old_value         JSON, nullable                 -- flexible JSON snapshot
 - new_value         JSON, nullable                 -- flexible JSON snapshot
-- created_at        TIMESTAMP, NOT NULL
+- created_at        TIMESTAMPTZ, NOT NULL
 ```
 
 > JSON snapshots example:
@@ -581,10 +614,10 @@ AuditLog
 
 ### Schema Stats
 
-| Tables | 20 |
+| Tables | 24 |
 |---|---|
 | Enums | 13 |
-| Soft deletes | Issue, Comment, Attachment |
+| Soft deletes | Issue, Comment, Attachment, Workspace, Project, IssueType, IssueStatus, Label |
 | CHECK constraints | IssueLink self-link prevention |
 | Audit trail | AuditLog covers all meaningful actions |
 | Real-time | Notifications + WebSocket via RabbitMQ |
@@ -654,6 +687,19 @@ If a revoked token is used, all sessions for that user are terminated (theft det
 2. Always return 200 even if email not found (prevents user enumeration)
 3. `POST /auth/reset-password` — validate token, hash new password, revoke ALL refresh tokens
 4. Revoking all refresh tokens forces re-login everywhere (security on compromise)
+
+### Email Verification Flow
+
+1. On `POST /auth/register`, create the user with `email_verified = false`, generate a
+   single-use token, store its **hash** in EmailVerificationToken (24h expiry), and email the link.
+2. `POST /auth/verify-email` — look up by token hash, check it is not expired and not consumed,
+   set `users.email_verified = true`, set `consumed_at = now()`.
+3. `POST /auth/resend-verification` — invalidate any outstanding tokens for the user, issue a
+   fresh one. Always return 200 (no account enumeration).
+4. Gate sensitive actions (creating/joining workspaces, accepting invitations) behind
+   `email_verified = true`. Login itself may be allowed, but with reduced capability until verified.
+
+> Tokens are hashed at rest exactly like refresh tokens — a leaked DB row must not be replayable.
 
 ### Authorization Logic
 
@@ -758,7 +804,8 @@ POST   /api/v1/auth/logout            🔓 Invalidate token
 POST   /api/v1/auth/refresh           🔓 Refresh JWT token
 POST   /api/v1/auth/forgot-password   🌐 Send reset email
 POST   /api/v1/auth/reset-password    🌐 Reset with token
-POST   /api/v1/auth/verify-email      🌐 Verify email address
+POST   /api/v1/auth/verify-email          🌐 Verify email address
+POST   /api/v1/auth/resend-verification   🌐 Resend verification email
 ```
 
 ### User Endpoints
@@ -950,18 +997,24 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 
 ### Endpoint Count
 
+> **Canonical endpoint count — single source of truth.** This table already includes every
+> endpoint added by later sections (member search §26, identifier resolution §24, issue statuses
+> §33, resend-verification §6). The running totals quoted in §32/§33 (92, 97) were cumulative
+> drafts and also inherited a base off-by-one; this table supersedes them.
+
 | Resource Group | Count |
 |---|---|
-| Auth | 7 |
+| Auth | 8 |
 | Users | 5 |
 | Workspaces | 5 |
-| Workspace Members | 4 |
+| Workspace Members (incl. search) | 5 |
 | Invitations | 4 |
 | Projects | 5 |
-| Project Members | 4 |
+| Project Members (incl. search) | 5 |
 | Issue Types | 4 |
+| Issue Statuses | 5 |
 | Sprints | 7 |
-| Issues | 12 |
+| Issues (incl. resolve-by-identifier) | 13 |
 | Subtasks | 2 |
 | Issue Assignees | 3 |
 | Issue Links | 3 |
@@ -972,7 +1025,7 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 | Notification Preferences | 2 |
 | Audit Log | 3 |
 | Charts | 3 |
-| **Total** | **89** |
+| **Total** | **99** |
 
 ---
 
@@ -1032,10 +1085,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 Every meaningful action follows this four-step pattern:
 
 ```java
-public Issue updateStatus(UUID issueId, IssueStatus newStatus, UUID actorId) {
-    // 1. Persist to database
+public Issue updateStatus(UUID issueId, UUID newStatusId, UUID actorId) {
+    // 1. Persist to database (status is an IssueStatus FK now, not an enum — see §33)
     Issue issue = issueRepository.findById(issueId)...
-    issue.setStatus(newStatus);
+    issue.setStatusId(newStatusId);
     Issue saved = issueRepository.save(issue);
 
     // 2. Write audit log
@@ -1047,7 +1100,7 @@ public Issue updateStatus(UUID issueId, IssueStatus newStatus, UUID actorId) {
     // 4. Push WebSocket event
     messagingTemplate.convertAndSend(
         "/topic/project/" + issue.getProjectId(),
-        new IssueStatusChangedEvent(issueId, newStatus)
+        new IssueStatusChangedEvent(issueId, newStatusId)
     );
 
     return saved;
@@ -1319,27 +1372,48 @@ shared/
 ### Database Migrations (Flyway)
 
 ```
-resources/db/migration/
-├── V1__create_users.sql
-├── V2__create_workspaces.sql
-├── V3__create_projects.sql
-├── V4__create_sprints.sql
-├── V5__create_issue_types.sql
-├── V6__create_issues.sql
-├── V7__create_issue_assignees.sql
-├── V8__create_issue_links.sql
-├── V9__create_comments.sql
-├── V10__create_labels.sql
-├── V11__create_attachments.sql
-├── V12__create_notifications.sql
-├── V13__create_invitations.sql
-├── V14__create_audit_log.sql
-├── V15__create_refresh_tokens.sql
-└── V16__seed_default_issue_types.sql
+resources/db/migration/   ← CANONICAL LIST (supersedes the drafts in §32 and §33)
+├── V1__create_users.sql                       -- includes email_verified
+├── V2__create_refresh_tokens.sql
+├── V3__create_email_verification_tokens.sql
+├── V4__create_workspaces.sql                  -- slug uses a partial unique index (§21)
+├── V5__create_user_workspaces.sql
+├── V6__create_invitations.sql
+├── V7__create_projects.sql                    -- includes key, soft-delete columns
+├── V8__create_project_members.sql
+├── V9__create_default_issue_types_table.sql
+├── V10__create_issue_types.sql
+├── V11__create_default_issue_statuses_table.sql
+├── V12__create_issue_statuses.sql
+├── V13__create_sprints.sql
+├── V14__create_labels.sql
+├── V15__create_issues.sql                     -- status_id FK, number, version
+├── V16__create_issue_assignees.sql
+├── V17__create_issue_links.sql
+├── V18__create_issue_labels.sql
+├── V19__create_comments.sql
+├── V20__create_comment_mentions.sql
+├── V21__create_attachments.sql
+├── V22__create_notifications.sql
+├── V23__create_notification_preferences.sql
+├── V24__create_audit_log.sql
+├── V25__seed_default_issue_types.sql
+├── V26__seed_default_issue_statuses.sql
+└── V27__add_indexes.sql
 ```
 
 > Each file runs exactly once, never edited retroactively.
 > Rolling back means writing a new migration.
+>
+> **Notes on the canonical list:**
+> - FK-ordered: every table is created after the tables it references (e.g. issues after
+    >   projects/sprints/issue_types/issue_statuses, join tables after both parents).
+> - The five join tables that earlier drafts omitted — user_workspaces, project_members,
+    >   issue_labels, comment_mentions, notification_preferences — each have their own migration here.
+> - Because this is a greenfield schema, soft-delete columns and partial unique indexes (§21, §32)
+    >   are written **into** the relevant CREATE TABLE statements rather than added later by ALTER.
+> - Specific V-numbers cited in the older correction sections (§21, §24, §31–§33) refer to the
+    >   pre-canonical numbering and are illustrative only — this list is authoritative.
 
 ### application.yml
 
@@ -3149,8 +3223,8 @@ PostgreSQL supports partial indexes — uniqueness enforced only on rows matchin
 -- V18__fix_soft_delete_unique_constraints.sql
 
 -- Add soft delete to workspace and issue_type (missing from original schema)
-ALTER TABLE workspace ADD COLUMN deleted_at TIMESTAMP;
-ALTER TABLE issue_type ADD COLUMN deleted_at TIMESTAMP;
+ALTER TABLE workspace ADD COLUMN deleted_at TIMESTAMPTZ;
+ALTER TABLE issue_type ADD COLUMN deleted_at TIMESTAMPTZ;
 ALTER TABLE issue_type ADD COLUMN deleted_by UUID REFERENCES users(id);
 
 -- Replace unique constraints with partial indexes
@@ -3701,7 +3775,7 @@ Hard-deleting a project destroys all issues, sprints, and history permanently. S
 
 ```sql
 -- V19__add_project_soft_delete.sql
-ALTER TABLE project ADD COLUMN deleted_at TIMESTAMP;
+ALTER TABLE project ADD COLUMN deleted_at TIMESTAMPTZ;
 ALTER TABLE project ADD COLUMN deleted_by UUID REFERENCES users(id);
 ```
 
@@ -3714,28 +3788,11 @@ projectRepository.findByIdAndDeletedAtIsNull(projectId)
 
 ### Updated Flyway Migration List
 
-```
-V1__create_users.sql
-V2__create_workspaces.sql
-V3__create_projects.sql
-V4__create_sprints.sql
-V5__create_issue_types.sql
-V6__create_default_issue_types_table.sql
-V7__create_issues.sql
-V8__create_issue_assignees.sql
-V9__create_issue_links.sql
-V10__create_comments.sql
-V11__create_labels.sql
-V12__create_attachments.sql
-V13__create_notifications.sql
-V14__create_invitations.sql
-V15__create_audit_log.sql
-V16__create_refresh_tokens.sql
-V17__seed_default_issue_types.sql
-V18__fix_soft_delete_unique_constraints.sql
-V19__add_project_soft_delete.sql
-V20__add_indexes.sql
-```
+> **Superseded.** This list (and the one in §33) has been replaced by the single canonical
+> migration list in §9. The canonical list is FK-ordered and adds the join-table migrations
+> (user_workspaces, project_members, issue_labels, comment_mentions, notification_preferences)
+> and email_verification_tokens that were missing here. The soft-delete columns added by the
+> ALTER statements above are folded into the relevant CREATE TABLE statements there.
 
 ### Final Soft Delete Inventory
 
@@ -3750,12 +3807,14 @@ V20__add_indexes.sql
 
 ### Final Updated API Endpoint Count
 
+> **Superseded by the canonical count in §7 (99 total).** The endpoints below are already
+> included there; the "92" running total predates the issue-status and verification endpoints.
+
 | Added | Endpoints |
 |---|---|
 | Member search (workspace) | 1 |
 | Member search (project) | 1 |
 | Resolve issue by identifier | 1 |
-| **New total** | **92** |
 
 ---
 
@@ -3788,8 +3847,8 @@ IssueStatus
 - color         VARCHAR, NOT NULL              ← hex code
 - position      INTEGER, NOT NULL              ← display order on board
 - is_default    BOOLEAN, NOT NULL, DEFAULT false
-- created_at    TIMESTAMP, NOT NULL
-- deleted_at    TIMESTAMP, nullable            ← soft delete
+- created_at    TIMESTAMPTZ, NOT NULL
+- deleted_at    TIMESTAMPTZ, nullable            ← soft delete
 
 UNIQUE (project_id, position) WHERE deleted_at IS NULL
 UNIQUE (project_id, name) WHERE deleted_at IS NULL
@@ -3954,32 +4013,14 @@ new_value: { "statusId": "uuid", "statusName": "In Review", "category": "IN_PROG
 ### Updated Flyway Migration List
 
 ```
-V1__create_users.sql
-V2__create_workspaces.sql
-V3__create_projects.sql
-V4__create_sprints.sql
-V5__create_issue_types.sql
-V6__create_default_issue_types_table.sql
-V7__create_issue_statuses.sql
-V8__create_default_issue_statuses_table.sql
-V9__create_issues.sql
-V10__create_issue_assignees.sql
-V11__create_issue_links.sql
-V12__create_comments.sql
-V13__create_labels.sql
-V14__create_attachments.sql
-V15__create_notifications.sql
-V16__create_invitations.sql
-V17__create_audit_log.sql
-V18__create_refresh_tokens.sql
-V19__seed_default_issue_types.sql
-V20__seed_default_issue_statuses.sql
-V21__fix_soft_delete_unique_constraints.sql
-V22__add_project_soft_delete.sql
-V23__add_indexes.sql
+Superseded — see the canonical Flyway migration list in §9, which replaces this list and the
+one in §32. This draft correctly splits issue statuses (default table + project table) but still
+omits the join-table migrations; the canonical list includes them and is FK-ordered.
 ```
 
 ### Updated API Endpoint Count
+
+> **Superseded by §7 (canonical total 99).** The five status endpoints below are included there.
 
 | Added | Endpoints |
 |---|---|
@@ -3988,7 +4029,180 @@ V23__add_indexes.sql
 | Update status | 1 |
 | Delete status | 1 |
 | Reorder statuses | 1 |
-| **New total** | **97** |
+
+---
+
+## 34. Issue Filtering & Search
+
+Filtering is **folded into the existing list endpoints** as query parameters — it adds no new
+endpoints. `GET /projects/{projectId}/issues` and `GET /sprints/{sprintId}/issues` accept the
+same filter set.
+
+### Query Parameters
+
+```
+?statusCategory=IN_PROGRESS        filter by category (TODO | IN_PROGRESS | DONE)
+&statusId={uuid}                   filter by a specific configurable status
+&assigneeId={uuid}                 issues assigned to this user
+&reporterId={uuid}                 issues created by this user
+&typeId={uuid}                     by issue type
+&priority=HIGH                     LOW | MEDIUM | HIGH | CRITICAL
+&labelId={uuid}                    has this label (repeatable for AND/OR)
+&isBlocked=true                    only blocked / only unblocked
+&unassigned=true                   issues with no assignee
+&dueBefore=2026-07-01              due date upper bound
+&dueAfter=2026-06-01               due date lower bound
+&q=login button                    text match on title + description
+```
+
+All filters are optional and combine with AND. Pagination/sorting params from §23 still apply.
+
+### Implementation — JPA Specifications
+
+Keep the domain repository port clean (it takes a filter value object, not Spring types). The
+infrastructure adapter translates that filter into a JPA `Specification`, composing only the
+predicates that are present:
+
+```java
+// domain port
+List<Issue> search(IssueFilter filter, Pageable pageable);
+
+// infrastructure adapter
+Specification<IssueEntity> spec = Specification.where(notDeleted());
+if (filter.statusCategory() != null) spec = spec.and(hasCategory(filter.statusCategory()));
+if (filter.assigneeId() != null)     spec = spec.and(hasAssignee(filter.assigneeId()));
+if (filter.priority() != null)       spec = spec.and(hasPriority(filter.priority()));
+if (filter.isBlocked() != null)      spec = spec.and(isBlocked(filter.isBlocked()));
+if (filter.q() != null)              spec = spec.and(textMatches(filter.q()));
+return jpaRepo.findAll(spec, pageable).map(mapper::toDomain).getContent();
+```
+
+### Text Search
+
+For v1, `q` uses case-insensitive `ILIKE '%term%'` on `title` and `description`. This is fine up
+to tens of thousands of issues. When it stops scaling, upgrade to PostgreSQL full-text search
+without an API change:
+
+```sql
+ALTER TABLE issue ADD COLUMN search_vector tsvector
+    GENERATED ALWAYS AS (
+        to_tsvector('english', coalesce(title,'') || ' ' || coalesce(description,''))
+    ) STORED;
+
+CREATE INDEX idx_issue_search ON issue USING GIN (search_vector);
+```
+
+The endpoint contract stays identical — only the adapter's predicate changes from `ILIKE` to a
+`@@ plainto_tsquery(...)` match.
+
+---
+
+## 35. API Documentation (OpenAPI / Swagger)
+
+With ~99 endpoints, hand-maintained docs rot immediately. Generate them from the controllers
+with **springdoc-openapi**.
+
+### Dependency
+
+```xml
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+    <version>2.6.0</version>
+</dependency>
+```
+
+### Served At
+
+```
+/v3/api-docs        ← raw OpenAPI 3 JSON (machine-readable, import into Postman/clients)
+/swagger-ui.html    ← interactive browser UI
+```
+
+> These tooling endpoints are **not** part of the 99 application endpoints counted in §7.
+
+### Configuration
+
+```java
+@Bean
+public OpenAPI simpliraOpenAPI() {
+    return new OpenAPI()
+        .info(new Info().title("simplira API").version("v1"))
+        .components(new Components().addSecuritySchemes("bearer-jwt",
+            new SecurityScheme().type(HTTP).scheme("bearer").bearerFormat("JWT")))
+        .addSecurityItem(new SecurityRequirement().addList("bearer-jwt"));
+}
+```
+
+Group endpoints with `@Tag` on each controller (Auth, Issues, Sprints, …) and document request
+bodies/responses with `@Operation` where the intent isn't obvious from the method signature.
+
+### Production
+
+Expose Swagger UI only in non-prod, or gate it behind admin auth. The raw `/v3/api-docs` can stay
+on if it's behind the same JWT filter as the rest of `/api`.
+
+```properties
+# application-prod.properties
+springdoc.swagger-ui.enabled=false
+```
+
+---
+
+## 36. Optimistic Locking & Concurrency
+
+Multiple users edit the same board at once. Two risks: two people editing the same issue and
+overwriting each other ("lost update"), and concurrent drag-and-drop racing on the same
+position. The `version` column added to `Issue` (§4) handles the first cleanly.
+
+### How It Works
+
+The JPA entity carries a `@Version` field mapped to the `version` column. Hibernate adds
+`WHERE version = ?` to every UPDATE and bumps the value on success. If two transactions read
+version 5 and both try to write, the first wins (version → 6) and the second's UPDATE matches
+zero rows, so Hibernate throws `OptimisticLockException`.
+
+```java
+@Entity
+public class IssueEntity {
+    @Version
+    private long version;   // maps to issue.version
+}
+```
+
+The domain `Issue` also carries `version` so it survives the round-trip to the client. The client
+sends back the version it last read on a `PATCH /issues/{id}`; the server compares.
+
+### Surfacing the Conflict
+
+Translate the exception in `GlobalExceptionHandler` to a real HTTP status instead of a 500:
+
+```java
+@ExceptionHandler({OptimisticLockException.class, ObjectOptimisticLockingFailureException.class})
+public ResponseEntity<ErrorResponse> handleConflict(Exception e) {
+    return ResponseEntity.status(409).body(ErrorResponse.of(
+        "ISSUE_VERSION_CONFLICT",
+        "This issue was changed by someone else. Reload and reapply your edit."));
+}
+```
+
+The frontend catches 409, refetches the issue, and asks the user to redo their change — no silent
+data loss.
+
+### Drag-and-Drop Positions
+
+Position writes (§10 float midpoint) should run inside a short transaction and rely on the same
+`version` check. If two reorders collide, the loser gets a 409 and the client re-reads the
+column's current order before retrying. The periodic position-normalization job must also run in
+a transaction so it never fights a live reorder.
+
+### Scope for v1
+
+Apply `@Version` to `Issue` only — it's where concurrent edits actually happen. `Comment` and
+`Sprint` can adopt the same pattern later if needed; they're lower-contention and not worth the
+added column churn now.
+
+---
 
 ---
 
