@@ -1,0 +1,23 @@
+meta {
+  name: Get me
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/users/me
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+}
+
+docs {
+  Sends the bearer token captured by Auth/Login.
+  
+  The token carries only the user id (plus email and full name as claims) - the filter
+  loads the user from the database on every request, so roles are never stale.
+}

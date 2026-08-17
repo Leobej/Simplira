@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Simplira API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

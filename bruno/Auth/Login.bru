@@ -1,0 +1,39 @@
+meta {
+  name: Login
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{userEmail}}",
+    "password": "{{userPassword}}"
+  }
+}
+
+vars:post-response {
+  accessToken: res.body.data.accessToken
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.tokenType: eq Bearer
+}
+
+docs {
+  Captures data.accessToken into the accessToken variable. The collection's bearer auth
+  reads that variable, so every authenticated request works once this has run.
+  
+  Casing does not matter - "JOHN@EXAMPLE.COM" reaches the same account.
+  The token is valid for 15 minutes (simplira.jwt.access-token-expiry).
+}

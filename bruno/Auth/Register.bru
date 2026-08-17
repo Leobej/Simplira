@@ -1,0 +1,47 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{userEmail}}",
+    "password": "{{userPassword}}",
+    "fullName": "Dev User"
+  }
+}
+
+tests {
+  test("creates the fixed account, or reports it already exists", function() {
+    expect(res.getStatus()).to.be.oneOf([201, 409]);
+    if (res.getStatus() === 201) {
+      expect(res.getBody().data.email).to.equal(bru.getEnvVar("userEmail").toLowerCase());
+      expect(res.getBody().data.emailVerified).to.equal(false);
+    } else {
+      expect(res.getBody().error.code).to.equal("EMAIL_ALREADY_EXISTS");
+    }
+  });
+}
+
+docs {
+  Creates the account the rest of the collection logs in as, taken from the
+  userEmail and userPassword environment variables.
+
+  The address is fixed, so this returns 201 the first time and 409 on every run
+  after that. Both count as a pass here - "Register - duplicate email" is the
+  request that asserts the conflict deliberately.
+
+  The address is stored trimmed and lowercased, and the password must be 8-72
+  characters, since BCrypt ignores anything past 72 bytes.
+}

@@ -1,0 +1,36 @@
+meta {
+  name: Register - duplicate email
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{userEmail}}",
+    "password": "{{userPassword}}",
+    "fullName": "Dev User Again"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error.code: eq EMAIL_ALREADY_EXISTS
+}
+
+docs {
+  Sends the same fixed address as Register, so it conflicts once that account
+  exists - run Register first on a fresh database.
+  
+  Two requests racing here would both pass the service-layer check, so the unique
+  index is the real guard; the repository turns that violation into this same 409.
+}

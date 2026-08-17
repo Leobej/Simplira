@@ -1,0 +1,33 @@
+meta {
+  name: Register - invalid payload
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "not-an-email",
+    "password": "short",
+    "fullName": ""
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.error.code: eq VALIDATION_FAILED
+}
+
+docs {
+  Bean validation failures come back as VALIDATION_FAILED with one entry per field
+  in error.details, formatted as "field: message".
+}

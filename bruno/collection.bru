@@ -1,0 +1,12 @@
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Requests that need a token use auth: inherit and pick up the accessToken variable
+  that Auth/Login captures. Run Login once and everything else is authenticated.
+}

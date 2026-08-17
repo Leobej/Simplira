@@ -1,0 +1,21 @@
+meta {
+  name: Get me - no token
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/users/me
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+  res.body.error.code: eq UNAUTHENTICATED
+}
+
+docs {
+  A missing or expired token is a 401 in the standard envelope. An expired token
+  behaves identically - the filter simply never authenticates the request.
+}
