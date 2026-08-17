@@ -7,7 +7,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,21 +40,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = header.substring(7);
 
-        if (jwtService.isValid(token)
-                && SecurityContextHolder.getContext().getAuthentication() == null) {
-
-            UUID userId = jwtService.extractUserId(token);
-
-            userRepository.findById(userId).ifPresent(user -> {
-                var authentication = new UsernamePasswordAuthenticationToken(
-                        user,
-                        null,
-                        List.of()
-                );
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            });
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            jwtService.resolveUserId(token)
+                    .flatMap(userRepository::findById)
+                    .ifPresent(user -> {
+                        var authentication = new UsernamePasswordAuthenticationToken(
+                                user,
+                                null,
+                                List.of()
+                        );
+                        authentication.setDetails(
+                                new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    });
         }
 
         filterChain.doFilter(request, response);

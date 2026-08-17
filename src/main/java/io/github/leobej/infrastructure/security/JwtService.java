@@ -1,19 +1,21 @@
 package io.github.leobej.infrastructure.security;
 
 import io.github.leobej.domain.model.user.User;
+import io.github.leobej.domain.port.AccessTokenIssuer;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
 import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
-public class JwtService {
+public class JwtService implements AccessTokenIssuer {
 
     private final SecretKey key;
     private final long accessTokenExpirySeconds;
@@ -25,7 +27,8 @@ public class JwtService {
         this.accessTokenExpirySeconds = accessTokenExpirySeconds;
     }
 
-    public String generateAccessToken(User user) {
+    @Override
+    public String issueAccessToken(User user) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(user.getId().toString())
@@ -37,16 +40,17 @@ public class JwtService {
                 .compact();
     }
 
-    public UUID extractUserId(String token) {
-        return UUID.fromString(parseClaims(token).getSubject());
+    @Override
+    public long accessTokenExpirySeconds() {
+        return accessTokenExpirySeconds;
     }
 
-    public boolean isValid(String token) {
+    // Validation and subject extraction in one parse — empty means the token is unusable.
+    public Optional<UUID> resolveUserId(String token) {
         try {
-            parseClaims(token);
-            return true;
+            return Optional.of(UUID.fromString(parseClaims(token).getSubject()));
         } catch (Exception e) {
-            return false;
+            return Optional.empty();
         }
     }
 
@@ -56,9 +60,5 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-    }
-
-    public long getAccessTokenExpirySeconds() {
-        return accessTokenExpirySeconds;
     }
 }

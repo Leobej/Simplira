@@ -1,31 +1,33 @@
 package io.github.leobej.domain.service;
 
 import io.github.leobej.domain.model.user.User;
+import io.github.leobej.domain.port.AccessTokenIssuer;
+import io.github.leobej.domain.port.PasswordHasher;
 import io.github.leobej.domain.repository.UserRepository;
-import io.github.leobej.infrastructure.security.JwtService;
 import io.github.leobej.shared.exception.EmailAlreadyExistsException;
 import io.github.leobej.shared.exception.InvalidCredentialsException;
-import org.springframework.stereotype.Service;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
-@Service
+// Pure domain: no Spring annotations, no infrastructure imports.
+// Wired as a bean by infrastructure.config.DomainServiceConfig.
 public class AuthService {
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
+    private final PasswordHasher passwordHasher;
+    private final AccessTokenIssuer accessTokenIssuer;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(UserRepository userRepository, PasswordHasher passwordHasher, AccessTokenIssuer accessTokenIssuer) {
         this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
+        this.passwordHasher = passwordHasher;
+        this.accessTokenIssuer = accessTokenIssuer;
     }
 
     public User register(String email, String rawPassword, String fullName) {
         if (userRepository.existsByEmail(email)) {
             throw new EmailAlreadyExistsException(email);
         }
-        String hashed = passwordEncoder.encode(rawPassword);
+        String hashed = passwordHasher.hash(rawPassword);
         User user = User.register(email, hashed, fullName);
+        // This check is not atomic — the unique index is the real guard, and the
+        // repository turns that violation into the same EmailAlreadyExistsException.
         return userRepository.save(user);
     }
 
@@ -33,12 +35,12 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(InvalidCredentialsException::new);
 
-        if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
+        if (!passwordHasher.matches(rawPassword, user.getPassword())) {
             throw new InvalidCredentialsException();
         }
 
-        String accessToken = jwtService.generateAccessToken(user);
-        return new LoginResult(user, accessToken, jwtService.getAccessTokenExpirySeconds());
+        String accessToken = accessTokenIssuer.issueAccessToken(user);
+        return new LoginResult(user, accessToken, accessTokenIssuer.accessTokenExpirySeconds());
     }
 
     public record LoginResult(User user, String accessToken, long expiresIn) {
