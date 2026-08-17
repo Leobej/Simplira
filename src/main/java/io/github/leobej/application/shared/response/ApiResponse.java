@@ -1,7 +1,6 @@
 package io.github.leobej.application.shared.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.leobej.application.api.auth.response.ErrorResponse;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {

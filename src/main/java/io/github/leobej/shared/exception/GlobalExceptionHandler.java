@@ -1,7 +1,7 @@
 package io.github.leobej.shared.exception;
 
-import io.github.leobej.application.api.auth.response.ErrorResponse;
 import io.github.leobej.application.shared.response.ApiResponse;
+import io.github.leobej.application.shared.response.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;

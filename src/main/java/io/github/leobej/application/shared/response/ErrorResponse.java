@@ -1,4 +1,4 @@
-package io.github.leobej.application.api.auth.response;
+package io.github.leobej.application.shared.response;
 
 import java.util.List;
 
