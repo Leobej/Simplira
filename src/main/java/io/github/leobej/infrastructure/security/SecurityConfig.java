@@ -14,9 +14,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          RestAuthenticationEntryPoint authenticationEntryPoint) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.authenticationEntryPoint = authenticationEntryPoint;
     }
 
     @Bean
@@ -26,9 +29,15 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
+                        // Listed one by one: /auth/** would also open logout and refresh,
+                        // which are authenticated endpoints.
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/auth/register",
+                                "/api/v1/auth/login").permitAll()
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(exceptions ->
+                        exceptions.authenticationEntryPoint(authenticationEntryPoint))
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
 
