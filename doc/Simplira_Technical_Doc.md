@@ -18,6 +18,7 @@
 9. [Spring Boot Project Structure](#9-spring-boot-project-structure)
 10. [Key Architectural Patterns](#10-key-architectural-patterns)
     11–36. Frontend, Android, Testing, CI/CD, and later design decisions — see section headers.
+37. [Implementation Patterns — Persistence & Auth](#37-implementation-patterns--persistence--auth)
 
 ---
 
@@ -187,11 +188,11 @@ Register the server:
 - Right click **Servers** → **Register** → **Server**
 - **General tab** → Name: `Simplira`
 - **Connection tab:**
-  - Host: `postgres` (Docker service name — not localhost)
-  - Port: `5432`
-  - Database: `simplira`
-  - Username: `simplira`
-  - Password: `simplira`
+    - Host: `postgres` (Docker service name — not localhost)
+    - Port: `5432`
+    - Database: `simplira`
+    - Username: `simplira`
+    - Password: `simplira`
 
 ### Verifying Flyway Migrations
 
@@ -1574,16 +1575,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IssueNotFoundException.class)
     public ResponseEntity<ApiResponse<?>> handleNotFound(IssueNotFoundException ex) {
         return ResponseEntity.status(NOT_FOUND)
-            .body(ApiResponse.error(new ErrorResponse("ISSUE_NOT_FOUND", ex.getMessage())));
+                .body(ApiResponse.error(new ErrorResponse("ISSUE_NOT_FOUND", ex.getMessage())));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<?>> handleValidation(MethodArgumentNotValidException ex) {
         List<String> details = ex.getBindingResult().getFieldErrors().stream()
-            .map(e -> e.getField() + ": " + e.getDefaultMessage())
-            .toList();
+                .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .toList();
         return ResponseEntity.status(BAD_REQUEST)
-            .body(ApiResponse.error(new ErrorResponse("VALIDATION_ERROR", "Invalid request", details)));
+                .body(ApiResponse.error(new ErrorResponse("VALIDATION_ERROR", "Invalid request", details)));
     }
 }
 ```
@@ -1689,30 +1690,30 @@ api/
 **client.ts — Axios setup with auto token refresh:**
 ```typescript
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  withCredentials: true,            // sends HttpOnly cookie for refresh token
+    baseURL: import.meta.env.VITE_API_URL,
+    withCredentials: true,            // sends HttpOnly cookie for refresh token
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+    const token = useAuthStore.getState().accessToken;
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      try {
-        await useAuthStore.getState().refreshToken();
-        return apiClient(error.config);         // retry original request
-      } catch {
-        useAuthStore.getState().logout();
-        window.location.href = '/login';
-      }
+    (response) => response,
+    async (error) => {
+        if (error.response?.status === 401) {
+            try {
+                await useAuthStore.getState().refreshToken();
+                return apiClient(error.config);         // retry original request
+            } catch {
+                useAuthStore.getState().logout();
+                window.location.href = '/login';
+            }
+        }
+        return Promise.reject(error);
     }
-    return Promise.reject(error);
-  }
 );
 ```
 
@@ -2664,23 +2665,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(SimpliraException.class)
     public ResponseEntity<ApiResponse<?>> handleSimpliraException(SimpliraException ex) {
         return ResponseEntity
-            .status(ex.getHttpStatus())
-            .body(ApiResponse.error(new ErrorResponse(ex.getErrorCode(), ex.getMessage())));
+                .status(ex.getHttpStatus())
+                .body(ApiResponse.error(new ErrorResponse(ex.getErrorCode(), ex.getMessage())));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<?>> handleValidation(MethodArgumentNotValidException ex) {
         List<String> details = ex.getBindingResult().getFieldErrors().stream()
-            .map(e -> e.getField() + ": " + e.getDefaultMessage())
-            .toList();
+                .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .toList();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(ApiResponse.error(new ErrorResponse("VALIDATION_ERROR", "Invalid request", details)));
+                .body(ApiResponse.error(new ErrorResponse("VALIDATION_ERROR", "Invalid request", details)));
     }
 
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<?>> handleUnauthorized(AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(ApiResponse.error(new ErrorResponse("UNAUTHORIZED", "Authentication required")));
+                .body(ApiResponse.error(new ErrorResponse("UNAUTHORIZED", "Authentication required")));
     }
 
     // Catch-all — never expose internal details to client
@@ -2688,7 +2689,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);      // full stack trace logged internally
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(ApiResponse.error(new ErrorResponse("INTERNAL_ERROR", "An unexpected error occurred")));
+                .body(ApiResponse.error(new ErrorResponse("INTERNAL_ERROR", "An unexpected error occurred")));
     }
 }
 ```
@@ -4127,7 +4128,7 @@ with **springdoc-openapi**.
 @Bean
 public OpenAPI simpliraOpenAPI() {
     return new OpenAPI()
-        .info(new Info().title("simplira API").version("v1"))
+        .info(new Info().title("Simplira API").version("v1"))
         .components(new Components().addSecuritySchemes("bearer-jwt",
             new SecurityScheme().type(HTTP).scheme("bearer").bearerFormat("JWT")))
         .addSecurityItem(new SecurityRequirement().addList("bearer-jwt"));
@@ -4181,8 +4182,8 @@ Translate the exception in `GlobalExceptionHandler` to a real HTTP status instea
 @ExceptionHandler({OptimisticLockException.class, ObjectOptimisticLockingFailureException.class})
 public ResponseEntity<ErrorResponse> handleConflict(Exception e) {
     return ResponseEntity.status(409).body(ErrorResponse.of(
-        "ISSUE_VERSION_CONFLICT",
-        "This issue was changed by someone else. Reload and reapply your edit."));
+            "ISSUE_VERSION_CONFLICT",
+            "This issue was changed by someone else. Reload and reapply your edit."));
 }
 ```
 
@@ -4201,6 +4202,439 @@ a transaction so it never fights a live reorder.
 Apply `@Version` to `Issue` only — it's where concurrent edits actually happen. `Comment` and
 `Sprint` can adopt the same pattern later if needed; they're lower-contention and not worth the
 added column churn now.
+
+---
+
+---
+
+## 37. Implementation Patterns — Persistence & Auth
+
+Everything above describes *what* to build. This section records *how* it was actually built
+during the first vertical slice (auth), including the traps hit along the way. These patterns
+repeat for every aggregate — Workspace, Project, Sprint, Issue — so they're worth internalizing
+once here rather than rediscovering per feature.
+
+---
+
+### 37.1 Local Startup Order
+
+Containers first, application second. The Spring Boot app does not start its own dependencies.
+
+```bash
+docker compose up -d     # Postgres + RabbitMQ + pgAdmin
+docker ps                # confirm 0.0.0.0:5432->5432/tcp before continuing
+# then start the app
+```
+
+Starting the app alone produces a Flyway failure at boot:
+
+```
+FlywaySqlUnableToConnectToDbException: Unable to obtain connection from database:
+FATAL: password authentication failed for user "simplira"    (SQL State 28P01)
+```
+
+That same error also appears when a **local** PostgreSQL install is occupying port 5432 — it
+answers the connection instead of Docker and rejects the credentials. Diagnose with:
+
+```bash
+netstat -ano | findstr 5432    # two LISTENING lines = conflict
+net stop postgresql-x64-18
+sc config postgresql-x64-18 start= disabled    # note the space after start=
+```
+
+> A `psql` session that works via `docker exec` proves nothing about credentials — it connects
+> over a Unix socket inside the container and skips password auth entirely. Always test the
+> TCP path the application actually uses.
+
+---
+
+### 37.2 The Vertical Slice Recipe
+
+Build one feature top to bottom before starting the next. Ten steps, in dependency order — each
+file is compilable once the ones before it exist:
+
+| # | File | Layer |
+|---|---|---|
+| 1 | `V{n}__create_{table}.sql` | resources/db/migration |
+| 2 | `{Aggregate}.java` — pure domain model | domain/model |
+| 3 | `{Aggregate}Repository.java` — the port (interface) | domain/repository |
+| 4 | `{Aggregate}Entity.java` — JPA entity | infrastructure/persistence/postgres/entity |
+| 5 | `Jpa{Aggregate}Repository.java` — Spring Data interface | infrastructure/persistence/postgres/jpa |
+| 6 | `{Aggregate}EntityMapper.java` — entity ↔ domain | infrastructure/persistence/postgres/mapper |
+| 7 | `{Aggregate}RepositoryAdapter.java` — implements the port | infrastructure/persistence/postgres/adapter |
+| 8 | `{Aggregate}Service.java` — orchestration + business rules | domain/service |
+| 9 | `{Aggregate}Controller.java` + request/response DTOs | application/api |
+| 10 | exception + `GlobalExceptionHandler` entry | application/shared/exception |
+
+Verify each slice against the running database (pgAdmin or psql) before moving on. The only real
+per-aggregate thinking is step 3 — *which queries does this aggregate need?* Everything else is
+mechanical.
+
+> Frontend work stays deferred until the core API slices are working end to end. Building UI
+> against endpoints that don't exist yet means either throwaway mocks or constant blocking.
+
+---
+
+### 37.3 Assigned UUIDs and the `Persistable` Trap
+
+**This is the single most reusable lesson from the auth slice.** It will recur on every aggregate.
+
+The domain owns identity — `User.register()` calls `UUID.randomUUID()` so an object is
+identifiable before it is ever persisted. The consequence: entities arrive at
+`jpaRepository.save()` with a non-null ID. Spring Data uses ID-null-ness to choose between
+`persist()` (INSERT) and `merge()` (UPDATE), so a pre-populated ID sends a brand-new record down
+the UPDATE path against a row that doesn't exist:
+
+```
+org.hibernate.StaleObjectStateException:
+Row was already updated or deleted by another transaction for entity [...UserEntity with id '...']
+```
+
+The message says "already updated by another transaction," but nothing concurrent is happening —
+the real meaning is *"I tried to UPDATE a row that isn't there."*
+
+**Fix — implement `Persistable<UUID>` and flag newness explicitly:**
+
+```java
+@Entity
+@Table(name = "users")
+@Getter @Setter @NoArgsConstructor
+public class UserEntity implements Persistable<UUID> {
+
+    @Id
+    private UUID id;                 // NO @GeneratedValue — the domain assigns it
+
+    // ... other fields ...
+
+    @Transient
+    private boolean isNew = false;   // @Transient = in-memory only, not a column
+
+    @Override public UUID getId()      { return id; }
+    @Override public boolean isNew()   { return isNew; }
+    public void markNew()              { this.isNew = true; }
+}
+```
+
+The mapper sets the flag when converting a domain object destined for insert:
+
+```java
+public static UserEntity toEntity(User user) {
+    UserEntity entity = new UserEntity();
+    // ... field copies ...
+    entity.markNew();
+    return entity;
+}
+```
+
+`isNew() == true` → Spring Data calls `persist()` → INSERT. Correct behavior restored.
+
+**Rejected alternative:** keep `@GeneratedValue(strategy = GenerationType.UUID)` and have the
+domain pass `null` for the id. Simpler, but domain objects then have no identity until saved,
+which breaks any logic that references an unsaved aggregate. Domain-owned identity is the better
+fit for hexagonal and is the project standard.
+
+> Apply this pattern to **every** aggregate with a domain-assigned UUID PK. The database
+> `DEFAULT gen_random_uuid()` remains in the DDL as a harmless fallback that will not normally
+> fire.
+
+---
+
+### 37.4 Lombok Policy
+
+| Class kind | Lombok usage |
+|---|---|
+| JPA entity | `@Getter @Setter @NoArgsConstructor` — **never bare `@Data`** |
+| Domain model | none, or `@Getter` only — never `@Setter` |
+| DTO | prefer a `record` over Lombok entirely |
+
+**Why `@Data` is banned on entities.** It generates `equals()`, `hashCode()`, and `toString()`
+across all fields, and all three misbehave under JPA:
+
+- `toString()` walks lazy associations, triggering extra queries or `LazyInitializationException`,
+  and can recurse infinitely across bidirectional relationships.
+- `hashCode()` built on a mutable ID changes when the entity is persisted, corrupting any
+  `HashSet`/`HashMap` the entity was placed in beforehand.
+- `@Data` also implies `@RequiredArgsConstructor`, which can conflict with the no-arg constructor
+  JPA requires.
+
+**Domain models get no setters at all.** Fields that never change after construction (`id`,
+`createdAt`) are `final`; everything else mutates only through intention-revealing methods that
+also maintain invariants:
+
+```java
+public void markEmailVerified() {
+    this.emailVerified = true;
+    this.touch();               // updatedAt bump can't be forgotten
+}
+```
+
+A generic `setEmailVerified(true)` would let a caller skip the timestamp update. This is why the
+domain model is the one place worth writing by hand.
+
+---
+
+### 37.5 Mapping Strategy
+
+**Entity ↔ Domain: hand-written, always.** Two static methods per aggregate, roughly 15 lines:
+
+```java
+public final class UserEntityMapper {
+    private UserEntityMapper() {}
+    public static User toDomain(UserEntity e) { return new User(e.getId(), ...); }
+    public static UserEntity toEntity(User u) { /* setters + markNew() */ }
+}
+```
+
+**ModelMapper was evaluated and rejected** for this seam:
+
+- It populates objects by reflection via setters or field access — defeating the deliberate
+  no-setter encapsulation of the domain model, and pushing toward adding a no-arg constructor and
+  open fields purely to satisfy the library.
+- Mismatches surface as runtime nulls or mapping exceptions instead of compile errors. A
+  hand-written mapper fails the build the moment a field is renamed on one side.
+- Reflection cost on hot paths (board loads, issue lists).
+- The seam is exactly where the two shapes legitimately diverge (factory methods, fields present
+  on one side only), so custom configuration would be needed anyway.
+
+**If a mapping library is introduced later — use MapStruct, not ModelMapper.** MapStruct generates
+plain Java at compile time: no reflection overhead, and mismatches are build errors. Reasonable
+for domain ↔ response DTO, where both sides are flat data holders.
+
+---
+
+### 37.6 Password Handling
+
+The `PasswordEncoder` bean lives in infrastructure, and hashing happens in the **service**, never
+in the domain model. `User.register()` accepts an already-hashed string it treats as opaque —
+that keeps BCrypt (an infrastructure concern) out of the pure domain.
+
+```java
+@Configuration
+public class PasswordConfig {
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+```java
+String hashed = passwordEncoder.encode(rawPassword);
+User user = User.register(email, hashed, fullName);
+```
+
+**Verification uses `matches(raw, hash)` — never re-hash and string-compare.** BCrypt embeds a
+random salt per hash, so `encode()` on the same password twice produces different output.
+`matches()` extracts the salt and performs a constant-time comparison.
+
+---
+
+### 37.7 Account Enumeration Prevention on Login
+
+Unknown email and wrong password must be **indistinguishable** to the caller — same exception,
+same message, same status code:
+
+```java
+User user = userRepository.findByEmail(email)
+        .orElseThrow(InvalidCredentialsException::new);
+
+if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
+        throw new InvalidCredentialsException();   // identical to the above
+}
+```
+
+Response is always `401 INVALID_CREDENTIALS` / "Invalid email or password". Distinguishing them
+would let an attacker enumerate registered addresses. This mirrors the always-200 rule already
+specified for password reset (§6).
+
+**Related — the duplicate-email check is not redundant with the DB constraint.** `existsByEmail()`
+before insert gives a clean `409 EMAIL_ALREADY_EXISTS`; the `UNIQUE` constraint on `users.email`
+is the actual correctness backstop against the race where two simultaneous registrations both
+pass the check. UX from the check, correctness from the constraint.
+
+---
+
+### 37.8 Security Configuration
+
+Adding `spring-boot-starter-security` to the classpath with no configuration locks down **every**
+endpoint — including `/auth/login` itself, making authentication impossible. The giveaway is
+`Using generated security password: <uuid>` in the startup log and a 401 on every route.
+
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())                    // bearer tokens, no session cookies
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
+                .anyRequest().authenticated())
+            .addFilterBefore(jwtAuthenticationFilter,
+                UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+}
+```
+
+Omitting `.httpBasic()` and `.formLogin()` removes the default login page and basic-auth prompt.
+As the public endpoint list in §6 grows (forgot-password, reset-password, verify-email,
+accept-invitation, WebSocket handshake), extend the `permitAll` matchers accordingly.
+
+---
+
+### 37.9 JWT Authentication Filter
+
+Extends `OncePerRequestFilter` (guarantees single execution per request even across
+forwards/includes). The filter **only populates** the security context — it never rejects.
+Rejection is left to the authorization rules, which produce the 401 when the context is empty.
+
+```java
+String header = request.getHeader("Authorization");
+if (header == null || !header.startsWith("Bearer ")) {
+        filterChain.doFilter(request, response);    // no token → continue, don't reject
+    return;
+            }
+String token = header.substring(7);
+
+if (jwtService.isValid(token)
+        && SecurityContextHolder.getContext().getAuthentication() == null) {
+UUID userId = jwtService.extractUserId(token);
+    userRepository.findById(userId).ifPresent(user -> {
+var authentication = new UsernamePasswordAuthenticationToken(
+        user,        // principal = the domain User
+        null,        // credentials not needed post-auth
+        List.of()    // authorities empty by design — see below
+);
+        authentication.setDetails(
+            new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    });
+            }
+            filterChain.doFilter(request, response);
+```
+
+**Authorities are deliberately empty.** Per §6, roles are never carried in the JWT — they are
+workspace-scoped and fetched from the database per request via `AuthorizationService`. No
+`ROLE_` authorities are attached here.
+
+**Known tradeoff:** the filter performs one `findById` per authenticated request. This is the
+correct default — deleted or modified users take effect immediately — at the cost of a query per
+request. If it ever becomes a bottleneck, the options are a short-TTL cache or trusting the JWT
+claims for identity. Deliberate choice, not an oversight.
+
+**Convenience annotation** so controllers receive the domain `User` directly:
+
+```java
+@Target(ElementType.PARAMETER)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@AuthenticationPrincipal
+public @interface CurrentUser {}
+```
+
+```java
+@GetMapping("/me")
+public ApiResponse<UserResponse> me(@CurrentUser User user) {
+    return ApiResponse.success(UserResponse.from(user));
+}
+```
+
+---
+
+### 37.10 Response Envelope & DTO Rules
+
+The envelope from §7 is implemented as a generic record; `@JsonInclude(NON_NULL)` keeps the unused
+half out of the JSON so success responses are `{success, data}` and errors are `{success, error}`.
+
+```java
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {
+    public static <T> ApiResponse<T> success(T data)          { return new ApiResponse<>(true, data, null); }
+    public static <T> ApiResponse<T> failure(ErrorResponse e)  { return new ApiResponse<>(false, null, e); }
+}
+```
+
+**DTOs are Java records with Jakarta validation annotations**, mapped explicitly from the domain
+via a static `from()` factory. Explicit mapping is what guarantees the password hash can never
+leak into a response — `UserResponse` simply has no such field:
+
+```java
+public record UserResponse(UUID id, String email, String fullName,
+                           String avatarUrl, boolean emailVerified, Instant createdAt) {
+    public static UserResponse from(User user) { /* field copies — no password */ }
+}
+```
+
+> `spring-boot-starter-validation` must be present or `@Valid`, `@NotBlank`, and `@Email` compile
+> silently and enforce nothing.
+
+**Placement:** `ApiResponse`, `ErrorResponse`, and `GlobalExceptionHandler` live in the
+**application** layer, not the framework-free top-level `shared` package — they depend on Spring
+and produce HTTP concerns.
+
+**Status code mapping established so far:**
+
+| Exception | Status | Code |
+|---|---|---|
+| `EmailAlreadyExistsException` | 409 | `EMAIL_ALREADY_EXISTS` |
+| `InvalidCredentialsException` | 401 | `INVALID_CREDENTIALS` |
+| `MethodArgumentNotValidException` | 400 | `VALIDATION_FAILED` (+ field details) |
+| `OptimisticLockException` (§36) | 409 | `ISSUE_VERSION_CONFLICT` |
+
+---
+
+### 37.11 Flyway in Practice
+
+Migrations are applied automatically at application startup — drop a new
+`V{n}__{description}.sql` into `src/main/resources/db/migration/` and boot the app. No manual
+execution step.
+
+**Applied migrations cannot be edited.** Flyway checksums every file; changing one that has
+already run fails startup with a checksum mismatch. Two correction paths:
+
+| Situation | Action |
+|---|---|
+| Local dev, no data worth keeping | Edit the migration, then `docker compose down -v && docker compose up -d` to replay from scratch |
+| Shared or production environment | Never edit — add a new forward migration (`ALTER TABLE ...`) |
+
+Verify applied state at any time:
+
+```sql
+SELECT * FROM flyway_schema_history;
+```
+
+---
+
+### 37.12 Entity Mapping Gotcha — Duplicate Column
+
+```
+org.hibernate.MappingException: Column 'avatar_url' is duplicated in mapping for entity 'UserEntity'
+```
+
+Two properties resolved to the same column. Usually a pasted duplicate field, or a camelCase and a
+snake_case field coexisting — Spring Boot's default naming strategy converts `avatarUrl` to
+`avatar_url`, so a second field literally named `avatar_url` collides with it. One field per
+column:
+
+```java
+@Column(name = "avatar_url")
+private String avatarUrl;
+```
+
+Ignore the exception's suggestion to add `@Column(insertable=false, updatable=false)` — that is
+for intentionally mapping two properties to one column (e.g. an FK value alongside its
+relationship object), which is not this case. Hibernate reports only the first collision, so
+re-check the whole class after fixing one.
 
 ---
 
