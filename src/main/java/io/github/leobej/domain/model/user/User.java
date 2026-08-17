@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 @Getter
@@ -22,7 +23,7 @@ public class User {
         Instant now = Instant.now();
         return new User(
                 UUID.randomUUID(),   // domain owns identity
-                email,
+                normalizeEmail(email),
                 hashedPassword,
                 fullName,
                 null,                // no avatar yet
@@ -30,6 +31,11 @@ public class User {
                 now,
                 now
         );
+    }
+
+    // Email is a case-insensitive identifier: store and look it up in one canonical form.
+    public static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 
     public void markEmailVerified() {

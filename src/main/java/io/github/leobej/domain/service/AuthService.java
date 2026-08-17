@@ -21,18 +21,19 @@ public class AuthService {
     }
 
     public User register(String email, String rawPassword, String fullName) {
-        if (userRepository.existsByEmail(email)) {
-            throw new EmailAlreadyExistsException(email);
+        String normalizedEmail = User.normalizeEmail(email);
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new EmailAlreadyExistsException(normalizedEmail);
         }
         String hashed = passwordHasher.hash(rawPassword);
-        User user = User.register(email, hashed, fullName);
+        User user = User.register(normalizedEmail, hashed, fullName);
         // This check is not atomic — the unique index is the real guard, and the
         // repository turns that violation into the same EmailAlreadyExistsException.
         return userRepository.save(user);
     }
 
     public LoginResult login(String email, String rawPassword) {
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmail(User.normalizeEmail(email))
                 .orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordHasher.matches(rawPassword, user.getPassword())) {
