@@ -21,8 +21,8 @@ public final class UserEntityMapper {
         );
     }
 
-    // Domain → Database
-    public static UserEntity toEntity(User user) {
+    // Domain → Database. isNew drives Persistable#isNew(): true means INSERT, false means UPDATE.
+    public static UserEntity toEntity(User user, boolean isNew) {
         UserEntity entity = new UserEntity();
         entity.setId(user.getId());
         entity.setEmail(user.getEmail());
@@ -32,7 +32,9 @@ public final class UserEntityMapper {
         entity.setEmailVerified(user.isEmailVerified());
         entity.setCreatedAt(user.getCreatedAt());
         entity.setUpdatedAt(user.getUpdatedAt());
-        entity.markNew();
+        if (isNew) {
+            entity.markNew();
+        }
         return entity;
     }
 }

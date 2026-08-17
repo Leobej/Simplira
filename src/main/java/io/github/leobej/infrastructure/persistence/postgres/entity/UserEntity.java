@@ -4,8 +4,6 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.data.domain.Persistable;
 
 import java.time.Instant;
@@ -35,11 +33,10 @@ public class UserEntity implements Persistable<UUID> {
     @Column(name = "email_verified", nullable = false)
     private boolean emailVerified;
 
-    @CreationTimestamp
+    // Timestamps are set by the domain model (User.register / touch), not by Hibernate.
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
