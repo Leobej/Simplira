@@ -925,7 +925,7 @@ DELETE /api/v1/issues/{issueId}/block                               👤 Clear b
 PATCH  /api/v1/issues/{issueId}/position                            👤 Update position
 POST   /api/v1/issues/{issueId}/move-to-sprint                      👥 Move to sprint
 POST   /api/v1/issues/{issueId}/move-to-backlog                     👥 Move to backlog
-POST   /api/v1/projects/{projectId}/issues/bulk-assign              👥 Bulk assign issues
+POST   /api/v1/projects/{projectId}/issues/bulk-assign              👥 Bulk assign issues   -- not built: needs assignees
 ```
 
 ### Subtask Endpoints
@@ -1422,7 +1422,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V10__create_default_issue_types.sql        -- template rows (§31)
 ├── V11__create_issue_types.sql                -- per project, backfilled for existing ones
 ├── V12__create_default_issue_statuses.sql     -- template rows (§33)
-└── V13__create_issue_statuses.sql             -- per project, positions unique per board
+├── V13__create_issue_statuses.sql             -- per project, positions unique per board
+└── V14__create_issues.sql                     -- status_id, number, float positions, version
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1431,7 +1432,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
 
     create_email_verification_tokens.sql
     create_labels.sql
-    create_issues.sql                       -- status_id FK, number, version
     create_issue_assignees.sql
     create_issue_links.sql
     create_issue_labels.sql
@@ -4153,6 +4153,15 @@ omits the join-table migrations; the canonical list includes them and is FK-orde
 
 ## 34. Issue Filtering & Search
 
+> **As built:** `statusCategory`, `statusId`, `typeId`, `priority`, `reporterId`, `isBlocked`,
+> `dueBefore`, `dueAfter` and `q` all work, on both list endpoints, with `page` and `pageSize`
+> feeding the `meta` block of the envelope. `assigneeId`, `unassigned` and `labelId` are not
+> wired: assignees and labels do not exist yet.
+>
+> Since statuses are per project, a `statusCategory` is resolved to that project's status ids
+> before the query runs rather than joined at the database level — which is also why the sprint
+> endpoint resolves it only after loading the sprint.
+
 Filtering is **folded into the existing list endpoints** as query parameters — it adds no new
 endpoints. `GET /projects/{projectId}/issues` and `GET /sprints/{sprintId}/issues` accept the
 same filter set.
@@ -4269,6 +4278,11 @@ springdoc.swagger-ui.enabled=false
 ---
 
 ## 36. Optimistic Locking & Concurrency
+
+> **As built:** both halves are in place. `PATCH /issues/{id}` accepts the version the client last
+> read and is refused with 409 `ISSUE_VERSION_CONFLICT` before the database is touched, and
+> `@Version` on the entity catches the narrower race where two writes interleave after that check.
+> Both routes produce the same error code, so the client has one thing to handle.
 
 Multiple users edit the same board at once. Two risks: two people editing the same issue and
 overwriting each other ("lost update"), and concurrent drag-and-drop racing on the same
