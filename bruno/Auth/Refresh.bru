@@ -1,0 +1,32 @@
+meta {
+  name: Refresh
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/refresh
+  body: none
+  auth: none
+}
+
+vars:post-response {
+  accessToken: res.body.data.accessToken
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.tokenType: eq Bearer
+}
+
+docs {
+  Run Login first. There is no body and no Authorization header - the refresh cookie Bruno
+  stored from Login is the credential, which is why this endpoint is public: by the time a
+  client calls it, its access token has usually already expired.
+
+  Every call rotates the token. The old one is revoked immediately, and replaying it is treated
+  as theft: the server then revokes every session the account has, so the next Refresh fails too
+  and the user has to log in again.
+
+  The new access token is captured over the old one, so authenticated requests keep working.
+}

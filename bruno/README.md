@@ -24,6 +24,8 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Auth 3 | Register - duplicate email | 409 `EMAIL_ALREADY_EXISTS` |
 | Auth 4 | Register - invalid payload | 400 `VALIDATION_FAILED` with per-field details |
 | Auth 5 | Login - wrong password | 401 `INVALID_CREDENTIALS` |
+| Auth 6 | Refresh | 200 — rotates the cookie, captures a fresh `accessToken` |
+| Auth 7 | Logout | 204 — revokes the session; Refresh afterwards gives 401 |
 | Users 1 | Get me | 200 — inherits the collection's bearer auth |
 | Users 2 | Get me - no token | 401 `UNAUTHENTICATED` |
 

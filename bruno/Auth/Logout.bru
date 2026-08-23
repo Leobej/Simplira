@@ -1,0 +1,23 @@
+meta {
+  name: Logout
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/logout
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Revokes the refresh token the cookie carries and clears the cookie. Logging out twice is not
+  an error - a missing or unknown token is a no-op, so this always returns 204.
+
+  The access token stays valid until it expires (15 minutes); it is a signed JWT and nothing
+  revokes it. Run Refresh after this to confirm the session is gone - it answers 401.
+}
