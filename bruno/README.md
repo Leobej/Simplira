@@ -46,6 +46,13 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Projects 5 | List project members | 200 — creator is TEAM_LEADER |
 | Projects 6 | Add project member | 201 — needs `memberUserId`, already in the workspace |
 | Projects 7 | Delete project | 204 — soft delete; frees the key |
+| Sprints 1 | Create sprint | 201 — captures `sprintId`; starts PLANNED |
+| Sprints 2 | List sprints | 200 — ordered by start date |
+| Sprints 3 | Get sprint | 200 |
+| Sprints 4 | Update sprint | 200 — dates stay in order |
+| Sprints 5 | Start sprint | 200 — one ACTIVE sprint per project |
+| Sprints 6 | Close sprint | 200 — issue movement lands with the issues slice |
+| Sprints 7 | Delete sprint | 204 — close it first if ACTIVE |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

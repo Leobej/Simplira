@@ -1,0 +1,20 @@
+meta {
+  name: List sprints
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/sprints
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Anyone who can see the project, ordered by start date. If the project is invisible to you, its
+  sprints are invisible too.
+}

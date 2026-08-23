@@ -1,0 +1,25 @@
+meta {
+  name: Start sprint
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sprints/{{sprintId}}/start
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.status: eq ACTIVE
+}
+
+docs {
+  PLANNED to ACTIVE, and only from PLANNED - starting twice is 409 INVALID_SPRINT_TRANSITION.
+
+  A project can only have one ACTIVE sprint. Starting a second is 409 SPRINT_ALREADY_ACTIVE,
+  checked in the service and backstopped by a partial unique index for the racing case.
+
+  POST rather than PATCH because it carries side effects (§7).
+}

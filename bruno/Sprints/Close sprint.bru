@@ -1,0 +1,36 @@
+meta {
+  name: Close sprint
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sprints/{{sprintId}}/close
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "incompleteIssueAction": "MOVE_TO_BACKLOG"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.status: eq COMPLETED
+}
+
+docs {
+  ACTIVE to COMPLETED, and only from ACTIVE.
+
+  incompleteIssueAction is MOVE_TO_BACKLOG or MOVE_TO_SPRINT; the second requires targetSprintId,
+  which must belong to the same project and must not already be COMPLETED.
+
+  Note: issues do not exist yet, so nothing is actually moved. The contract is already the final
+  one, and the issues slice wires the movement behind it.
+}

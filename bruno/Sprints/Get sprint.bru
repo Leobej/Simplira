@@ -1,0 +1,19 @@
+meta {
+  name: Get sprint
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/sprints/{{sprintId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Run Create sprint first - it captures sprintId.
+}

@@ -1,0 +1,30 @@
+meta {
+  name: Update sprint
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/sprints/{{sprintId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Sprint 1 - hardening"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Omitted fields are left alone. Sending only one date keeps the other, and the pair still has to
+  be in order.
+}
