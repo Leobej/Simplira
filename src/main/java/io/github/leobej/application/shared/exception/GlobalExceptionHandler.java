@@ -13,6 +13,10 @@ import io.github.leobej.shared.exception.InvitationNotUsableException;
 import io.github.leobej.shared.exception.ProjectKeyAlreadyExistsException;
 import io.github.leobej.shared.exception.ProjectMemberNotFoundException;
 import io.github.leobej.shared.exception.ProjectNotFoundException;
+import io.github.leobej.shared.exception.InvalidSprintDatesException;
+import io.github.leobej.shared.exception.InvalidSprintTransitionException;
+import io.github.leobej.shared.exception.SprintAlreadyActiveException;
+import io.github.leobej.shared.exception.SprintNotFoundException;
 import io.github.leobej.shared.exception.InvalidRefreshTokenException;
 import io.github.leobej.shared.exception.SlugAlreadyExistsException;
 import io.github.leobej.shared.exception.WorkspaceMemberNotFoundException;
@@ -126,5 +130,29 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleInvalidProjectKey(InvalidProjectKeyException ex) {
         return ApiResponse.failure(ErrorResponse.of("INVALID_PROJECT_KEY", ex.getMessage()));
+    }
+
+    @ExceptionHandler(SprintNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleSprintNotFound(SprintNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("SPRINT_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(SprintAlreadyActiveException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleSprintAlreadyActive(SprintAlreadyActiveException ex) {
+        return ApiResponse.failure(ErrorResponse.of("SPRINT_ALREADY_ACTIVE", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidSprintTransitionException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleInvalidSprintTransition(InvalidSprintTransitionException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_SPRINT_TRANSITION", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidSprintDatesException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidSprintDates(InvalidSprintDatesException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_SPRINT_DATES", ex.getMessage()));
     }
 }
