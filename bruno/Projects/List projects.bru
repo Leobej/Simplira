@@ -1,0 +1,20 @@
+meta {
+  name: List projects
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/projects
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Filtered by what you can see: admins get every project in the workspace, everyone else gets the
+  PUBLIC ones plus the PRIVATE ones they belong to.
+}

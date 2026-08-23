@@ -1,0 +1,20 @@
+meta {
+  name: Delete project
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Workspace ADMIN only. Soft delete - issues, sprints and history survive, and the key becomes
+  available again because the unique index only covers rows where deleted_at IS NULL.
+}

@@ -1,0 +1,32 @@
+meta {
+  name: Update project
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "description": "The Spring Boot API behind Simplira"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Workspace ADMIN only. Omitted fields are left alone; sending "description": "" clears it.
+
+  Changing "key" renames every issue identifier in the project, so old links stop resolving -
+  treat it as a rename rather than a correction.
+}

@@ -1,0 +1,34 @@
+meta {
+  name: Add project member
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/members
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "userId": "{{memberUserId}}",
+    "role": "DEVELOPER"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Workspace ADMIN, or TEAM_LEADER on this project. Set memberUserId to somebody who is already
+  in the workspace - a project cannot reach outside it, so an unknown user is 404 MEMBER_NOT_FOUND.
+  Use Workspaces/List members to find an id.
+
+  Adding somebody who is already on the project just sets their role.
+}

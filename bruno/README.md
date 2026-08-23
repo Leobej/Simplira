@@ -39,6 +39,13 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Invitations 2 | List invitations | 200 — never includes the token |
 | Invitations 3 | Accept invitation | 200 — needs `invitationToken` pasted from the log |
 | Invitations 4 | Cancel invitation | 204 — the token stops working immediately |
+| Projects 1 | Create project | 201 — captures `projectId`; key derived from the name |
+| Projects 2 | List projects | 200 — filtered by what you can see |
+| Projects 3 | Get project | 200 — a private project answers 404 to outsiders |
+| Projects 4 | Update project | 200 — workspace ADMIN only |
+| Projects 5 | List project members | 200 — creator is TEAM_LEADER |
+| Projects 6 | Add project member | 201 — needs `memberUserId`, already in the workspace |
+| Projects 7 | Delete project | 204 — soft delete; frees the key |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

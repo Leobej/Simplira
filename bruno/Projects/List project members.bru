@@ -1,0 +1,21 @@
+meta {
+  name: List project members
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/members
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.data[0].role: eq TEAM_LEADER
+}
+
+docs {
+  Whoever created the project is on it as TEAM_LEADER - otherwise the creator of a PRIVATE
+  project would not be able to see what they had just made.
+}

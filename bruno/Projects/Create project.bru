@@ -1,0 +1,44 @@
+meta {
+  name: Create project
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/projects
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Simplira Backend",
+    "visibility": "PUBLIC"
+  }
+}
+
+vars:post-response {
+  projectId: res.body.data.id
+}
+
+assert {
+  res.status: eq 201
+  res.body.data.key: eq SB
+}
+
+docs {
+  Workspace ADMIN only. Run Workspaces/Create workspace first - it captures workspaceId.
+
+  The key is derived from the name: several words become initials ("Simplira Backend" -> SB), a
+  single word becomes its first ten characters. It is half of every issue identifier later: SB-42.
+
+  Creating this twice gives SB then SB2, so only the first run matches the key assert. Sending
+  "key" explicitly conflicts with 409 instead of being suffixed.
+
+  PUBLIC means every workspace member sees it. PRIVATE means only workspace admins and people
+  added to the project - and to everyone else it answers 404, not 403.
+}
