@@ -1208,7 +1208,9 @@ domain/
 │   ├── project/
 │   │   ├── Project.java
 │   │   ├── ProjectMember.java
-│   │   └── ProjectVisibility.java
+│   │   ├── ProjectVisibility.java
+│   │   ├── ProjectRole.java         ← TEAM_LEADER or DEVELOPER; ADMIN is workspace-wide
+│   │   └── ProjectMemberView.java   ← membership joined with the user behind it
 │   ├── sprint/
 │   │   ├── Sprint.java
 │   │   └── SprintStatus.java
@@ -1265,6 +1267,7 @@ domain/
 └── service/
     ├── AuthService.java
     ├── WorkspaceAuthorization.java   ← shared workspace permission rules
+    ├── ProjectAuthorization.java     ← §6 access resolution, reused by sprints and issues
     ├── UserService.java
     ├── WorkspaceService.java
     ├── ProjectService.java
@@ -1391,6 +1394,7 @@ shared/
 │   ├── SprintAlreadyActiveException.java
 │   └── GlobalExceptionHandler.java       ← @ControllerAdvice, single error handling
 ├── util/
+│   ├── ProjectKeyGenerator.java
 │   ├── SlugGenerator.java
 │   ├── TokenGenerator.java
 │   └── MentionParser.java                ← parses @username from comments
@@ -1408,7 +1412,10 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V2__create_refresh_tokens.sql
 ├── V3__create_workspaces.sql                  -- slug uses a partial unique index (§21)
 ├── V4__create_user_workspaces.sql             -- role VARCHAR + CHECK, unique per (user, workspace)
-└── V5__create_invitations.sql                 -- token hashed, one pending invite per address
+├── V5__create_invitations.sql                 -- token hashed, one pending invite per address
+├── V6__add_workspace_deleted_by.sql           -- §32: soft delete needs an actor
+├── V7__create_projects.sql                    -- key partial-unique per workspace, soft delete
+└── V8__create_project_members.sql             -- TEAM_LEADER or DEVELOPER, never ADMIN
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1416,8 +1423,6 @@ applied, so a slot held open for a table built later fails on every database tha
 higher number first. Email verification was originally penciled in as V3 and is a live example.
 
     create_email_verification_tokens.sql
-    create_projects.sql                     -- includes key, soft-delete columns
-    create_project_members.sql
     create_default_issue_types_table.sql
     create_issue_types.sql
     create_default_issue_statuses_table.sql
@@ -3380,6 +3385,14 @@ UNIQUE (workspace_id, key)        ← unique within a workspace
 Key rules: uppercase letters only, 2-10 characters, unique per workspace.
 Generated from project name by default ("Simplira Backend" → "SB"), user can override at creation.
 
+> **As built:** `ProjectKeyGenerator.fromName` takes initials when the name has several words
+> ("Simplira Backend" → SB) and the first ten characters when it has one ("Backend" → BACKEND).
+> A derived key that collides is suffixed quietly (SB, SB2, SB3); a key the caller asked for by
+> name conflicts with 409 instead, on the same reasoning as workspace slugs.
+>
+> Uniqueness is a partial index over live rows only, so deleting a project releases its key —
+> without that, a deleted project would keep "SIMP" for itself forever (§21).
+
 **Issue — add sequential number:**
 
 ```sql
@@ -3844,6 +3857,11 @@ ALTER TABLE workspace ADD COLUMN deleted_by UUID REFERENCES users(id);
 ```
 
 ### Project — Add Soft Delete
+
+> **As built:** both columns are in `V7__create_projects.sql` rather than a later ALTER, per the
+> greenfield rule in §9. The workspace `deleted_by` above was missed when workspaces were built
+> from §21 alone and arrived afterwards as `V6__add_workspace_deleted_by.sql` — §21 lists only
+> `deleted_at`, so reading it without §32 leaves the audit trail half-built.
 
 Hard-deleting a project destroys all issues, sprints, and history permanently. Soft delete instead:
 
