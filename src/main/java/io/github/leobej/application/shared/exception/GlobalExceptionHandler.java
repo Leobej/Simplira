@@ -8,7 +8,9 @@ import io.github.leobej.shared.exception.AlreadyMemberException;
 import io.github.leobej.shared.exception.BusinessRuleException;
 import io.github.leobej.shared.exception.DuplicateNameException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
+import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.IssueTypeNotFoundException;
+import io.github.leobej.shared.exception.IssueVersionConflictException;
 import io.github.leobej.shared.exception.DuplicateInvitationException;
 import io.github.leobej.shared.exception.ForbiddenException;
 import io.github.leobej.shared.exception.InvitationNotFoundException;
@@ -26,6 +28,7 @@ import io.github.leobej.shared.exception.SlugAlreadyExistsException;
 import io.github.leobej.shared.exception.WorkspaceMemberNotFoundException;
 import io.github.leobej.shared.exception.WorkspaceNotFoundException;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -183,5 +186,20 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiResponse<Void> handleBusinessRule(BusinessRuleException ex) {
         return ApiResponse.failure(ErrorResponse.of(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(IssueNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleIssueNotFound(IssueNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("ISSUE_NOT_FOUND", ex.getMessage()));
+    }
+
+    // Two routes to the same conflict: the service catching a stale version the client sent,
+    // and Hibernate's @Version losing the race between two writes (§36).
+    @ExceptionHandler({IssueVersionConflictException.class, ObjectOptimisticLockingFailureException.class})
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleVersionConflict(Exception ex) {
+        return ApiResponse.failure(ErrorResponse.of("ISSUE_VERSION_CONFLICT",
+                "This issue was changed by someone else. Reload and reapply your edit."));
     }
 }

@@ -52,6 +52,12 @@ public class ProjectRepositoryAdapter implements ProjectRepository {
     }
 
     @Override
+    public Optional<Project> findByKey(UUID workspaceId, String key) {
+        return jpaRepository.findByWorkspaceIdAndKeyAndDeletedAtIsNull(workspaceId, key)
+                .map(ProjectEntityMapper::toDomain);
+    }
+
+    @Override
     public List<Project> findAllInWorkspace(UUID workspaceId) {
         return jpaRepository.findByWorkspaceIdAndDeletedAtIsNullOrderByCreatedAt(workspaceId).stream()
                 .map(ProjectEntityMapper::toDomain)

@@ -14,5 +14,7 @@ public interface JpaProjectRepository extends JpaRepository<ProjectEntity, UUID>
     // Matches the partial unique index: a key freed by a soft delete is available again.
     boolean existsByWorkspaceIdAndKeyAndDeletedAtIsNull(UUID workspaceId, String key);
 
+    Optional<ProjectEntity> findByWorkspaceIdAndKeyAndDeletedAtIsNull(UUID workspaceId, String key);
+
     List<ProjectEntity> findByWorkspaceIdAndDeletedAtIsNullOrderByCreatedAt(UUID workspaceId);
 }

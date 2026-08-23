@@ -12,5 +12,6 @@ public interface ProjectRepository {
     // Soft-deleted projects are invisible to all of these.
     Optional<Project> findById(UUID id);
     boolean existsByKey(UUID workspaceId, String key);
+    Optional<Project> findByKey(UUID workspaceId, String key);
     List<Project> findAllInWorkspace(UUID workspaceId);
 }

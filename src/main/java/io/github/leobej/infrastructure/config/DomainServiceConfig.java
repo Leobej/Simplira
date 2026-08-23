@@ -7,6 +7,7 @@ import io.github.leobej.domain.port.EmailService;
 import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
 import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
+import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
 import io.github.leobej.domain.repository.ProjectMemberRepository;
@@ -17,6 +18,7 @@ import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.InvitationService;
+import io.github.leobej.domain.service.IssueService;
 import io.github.leobej.domain.service.IssueStatusService;
 import io.github.leobej.domain.service.IssueTypeService;
 import io.github.leobej.domain.service.ProjectAuthorization;
@@ -115,5 +117,16 @@ public class DomainServiceConfig {
     public IssueStatusService issueStatusService(IssueStatusRepository issueStatusRepository,
                                                  ProjectAuthorization projectAuthorization) {
         return new IssueStatusService(issueStatusRepository, projectAuthorization);
+    }
+
+    @Bean
+    public IssueService issueService(IssueRepository issueRepository,
+                                     IssueTypeRepository issueTypeRepository,
+                                     IssueStatusRepository issueStatusRepository,
+                                     ProjectRepository projectRepository,
+                                     SprintRepository sprintRepository,
+                                     ProjectAuthorization projectAuthorization) {
+        return new IssueService(issueRepository, issueTypeRepository, issueStatusRepository,
+                projectRepository, sprintRepository, projectAuthorization);
     }
 }
