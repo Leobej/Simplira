@@ -32,13 +32,16 @@ public class WorkspaceService {
     private final WorkspaceRepository workspaceRepository;
     private final UserWorkspaceRepository userWorkspaceRepository;
     private final UserRepository userRepository;
+    private final WorkspaceAuthorization authorization;
 
     public WorkspaceService(WorkspaceRepository workspaceRepository,
                             UserWorkspaceRepository userWorkspaceRepository,
-                            UserRepository userRepository) {
+                            UserRepository userRepository,
+                            WorkspaceAuthorization authorization) {
         this.workspaceRepository = workspaceRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
         this.userRepository = userRepository;
+        this.authorization = authorization;
     }
 
     public Workspace create(String name, String requestedSlug, UUID actorId) {
@@ -164,21 +167,15 @@ public class WorkspaceService {
     }
 
     private Workspace loadWorkspace(UUID workspaceId) {
-        return workspaceRepository.findById(workspaceId)
-                .orElseThrow(() -> new WorkspaceNotFoundException(workspaceId));
+        return authorization.requireWorkspace(workspaceId);
     }
 
-    // A non-member is told the workspace does not exist rather than that it is not theirs:
-    // a 403 here would confirm which workspace ids are real.
-    private UserWorkspace requireMembership(UUID workspaceId, UUID actorId) {
-        return userWorkspaceRepository.find(workspaceId, actorId)
-                .orElseThrow(() -> new WorkspaceNotFoundException(workspaceId));
+    private void requireMembership(UUID workspaceId, UUID actorId) {
+        authorization.requireMembership(workspaceId, actorId);
     }
 
     private void requireAdmin(UUID workspaceId, UUID actorId) {
-        if (!requireMembership(workspaceId, actorId).isAdmin()) {
-            throw new ForbiddenException("This action requires the ADMIN role in the workspace");
-        }
+        authorization.requireAdmin(workspaceId, actorId);
     }
 
     private String resolveSlug(String name, String requestedSlug) {

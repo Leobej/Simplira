@@ -3,10 +3,14 @@ package io.github.leobej.infrastructure.config;
 import io.github.leobej.domain.port.AccessTokenIssuer;
 import io.github.leobej.domain.port.PasswordHasher;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
+import io.github.leobej.domain.port.EmailService;
+import io.github.leobej.domain.repository.InvitationRepository;
 import io.github.leobej.domain.repository.UserRepository;
 import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AuthService;
+import io.github.leobej.domain.service.InvitationService;
+import io.github.leobej.domain.service.WorkspaceAuthorization;
 import io.github.leobej.domain.service.WorkspaceService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -30,9 +34,27 @@ public class DomainServiceConfig {
     }
 
     @Bean
+    public WorkspaceAuthorization workspaceAuthorization(WorkspaceRepository workspaceRepository,
+                                                        UserWorkspaceRepository userWorkspaceRepository) {
+        return new WorkspaceAuthorization(workspaceRepository, userWorkspaceRepository);
+    }
+
+    @Bean
     public WorkspaceService workspaceService(WorkspaceRepository workspaceRepository,
                                              UserWorkspaceRepository userWorkspaceRepository,
-                                             UserRepository userRepository) {
-        return new WorkspaceService(workspaceRepository, userWorkspaceRepository, userRepository);
+                                             UserRepository userRepository,
+                                             WorkspaceAuthorization authorization) {
+        return new WorkspaceService(workspaceRepository, userWorkspaceRepository, userRepository, authorization);
+    }
+
+    @Bean
+    public InvitationService invitationService(InvitationRepository invitationRepository,
+                                               UserWorkspaceRepository userWorkspaceRepository,
+                                               UserRepository userRepository,
+                                               WorkspaceAuthorization authorization,
+                                               EmailService emailService,
+                                               @Value("${simplira.invitations.expiry}") long invitationExpirySeconds) {
+        return new InvitationService(invitationRepository, userWorkspaceRepository, userRepository,
+                authorization, emailService, Duration.ofSeconds(invitationExpirySeconds));
     }
 }

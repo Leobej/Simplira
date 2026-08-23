@@ -4,7 +4,11 @@ import io.github.leobej.application.shared.response.ApiResponse;
 import io.github.leobej.application.shared.response.ErrorResponse;
 import io.github.leobej.shared.exception.EmailAlreadyExistsException;
 import io.github.leobej.shared.exception.InvalidCredentialsException;
+import io.github.leobej.shared.exception.AlreadyMemberException;
+import io.github.leobej.shared.exception.DuplicateInvitationException;
 import io.github.leobej.shared.exception.ForbiddenException;
+import io.github.leobej.shared.exception.InvitationNotFoundException;
+import io.github.leobej.shared.exception.InvitationNotUsableException;
 import io.github.leobej.shared.exception.InvalidRefreshTokenException;
 import io.github.leobej.shared.exception.SlugAlreadyExistsException;
 import io.github.leobej.shared.exception.WorkspaceMemberNotFoundException;
@@ -70,5 +74,29 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiResponse<Void> handleSlugTaken(SlugAlreadyExistsException ex) {
         return ApiResponse.failure(ErrorResponse.of("SLUG_ALREADY_EXISTS", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvitationNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleInvitationNotFound(InvitationNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVITATION_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvitationNotUsableException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleInvitationNotUsable(InvitationNotUsableException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVITATION_NOT_USABLE", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateInvitationException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleDuplicateInvitation(DuplicateInvitationException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVITATION_ALREADY_SENT", ex.getMessage()));
+    }
+
+    @ExceptionHandler(AlreadyMemberException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleAlreadyMember(AlreadyMemberException ex) {
+        return ApiResponse.failure(ErrorResponse.of("ALREADY_A_MEMBER", ex.getMessage()));
     }
 }
