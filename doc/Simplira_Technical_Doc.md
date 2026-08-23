@@ -379,7 +379,9 @@ Sprint
 - updated_at        TIMESTAMPTZ, NOT NULL
 ```
 
-> Only one ACTIVE sprint per project enforced at service layer.
+> Only one ACTIVE sprint per project. Enforced in the service so the caller gets a clean 409,
+> and by a partial unique index over rows where status = 'ACTIVE' so two racing requests cannot
+> both win - the same split §37.7 uses for duplicate registrations.
 
 ### IssueType
 
@@ -1415,7 +1417,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V5__create_invitations.sql                 -- token hashed, one pending invite per address
 ├── V6__add_workspace_deleted_by.sql           -- §32: soft delete needs an actor
 ├── V7__create_projects.sql                    -- key partial-unique per workspace, soft delete
-└── V8__create_project_members.sql             -- TEAM_LEADER or DEVELOPER, never ADMIN
+├── V8__create_project_members.sql             -- TEAM_LEADER or DEVELOPER, never ADMIN
+└── V9__create_sprints.sql                     -- one ACTIVE sprint per project, by partial index
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1427,7 +1430,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
     create_issue_types.sql
     create_default_issue_statuses_table.sql
     create_issue_statuses.sql
-    create_sprints.sql
     create_labels.sql
     create_issues.sql                       -- status_id FK, number, version
     create_issue_assignees.sql
@@ -3701,6 +3703,12 @@ int expireOutdated(@Param("now") LocalDateTime now);
 ---
 
 ## 29. CloseSprintRequest DTO
+
+> **As built:** the request shape below is implemented exactly as specified, so clients will not
+> have to change — but the incomplete-issue handling is not wired, because issues do not exist
+> yet. Closing validates the target sprint (same project, not already COMPLETED) and moves the
+> sprint to COMPLETED; `MOVE_TO_BACKLOG` and `MOVE_TO_SPRINT` currently differ only in that
+> validation. Wire the issue movement, the audit entry and the notification with the issues slice.
 
 ```java
 public record CloseSprintRequest(
