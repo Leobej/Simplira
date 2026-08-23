@@ -8,7 +8,11 @@ import io.github.leobej.shared.exception.AlreadyMemberException;
 import io.github.leobej.shared.exception.DuplicateInvitationException;
 import io.github.leobej.shared.exception.ForbiddenException;
 import io.github.leobej.shared.exception.InvitationNotFoundException;
+import io.github.leobej.shared.exception.InvalidProjectKeyException;
 import io.github.leobej.shared.exception.InvitationNotUsableException;
+import io.github.leobej.shared.exception.ProjectKeyAlreadyExistsException;
+import io.github.leobej.shared.exception.ProjectMemberNotFoundException;
+import io.github.leobej.shared.exception.ProjectNotFoundException;
 import io.github.leobej.shared.exception.InvalidRefreshTokenException;
 import io.github.leobej.shared.exception.SlugAlreadyExistsException;
 import io.github.leobej.shared.exception.WorkspaceMemberNotFoundException;
@@ -98,5 +102,29 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiResponse<Void> handleAlreadyMember(AlreadyMemberException ex) {
         return ApiResponse.failure(ErrorResponse.of("ALREADY_A_MEMBER", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProjectNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleProjectNotFound(ProjectNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("PROJECT_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProjectMemberNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleProjectMemberNotFound(ProjectMemberNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("PROJECT_MEMBER_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProjectKeyAlreadyExistsException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleProjectKeyTaken(ProjectKeyAlreadyExistsException ex) {
+        return ApiResponse.failure(ErrorResponse.of("PROJECT_KEY_ALREADY_EXISTS", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidProjectKeyException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidProjectKey(InvalidProjectKeyException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_PROJECT_KEY", ex.getMessage()));
     }
 }

@@ -81,7 +81,7 @@ public class WorkspaceService {
     public void delete(UUID workspaceId, UUID actorId) {
         requireAdmin(workspaceId, actorId);
         Workspace workspace = loadWorkspace(workspaceId);
-        workspace.delete();               // soft: the partial index frees the slug for reuse
+        workspace.delete(actorId);               // soft: the partial index frees the slug for reuse
         workspaceRepository.save(workspace);
     }
 

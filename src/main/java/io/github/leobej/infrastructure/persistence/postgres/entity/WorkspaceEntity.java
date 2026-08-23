@@ -36,6 +36,9 @@ public class WorkspaceEntity implements Persistable<UUID> {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "deleted_by")
+    private UUID deletedBy;
+
     @Transient
     private boolean isNew = false;
 

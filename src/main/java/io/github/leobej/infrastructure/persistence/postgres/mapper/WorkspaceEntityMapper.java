@@ -16,7 +16,8 @@ public final class WorkspaceEntityMapper {
                 entity.getOwnerId(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                entity.getDeletedAt()
+                entity.getDeletedAt(),
+                entity.getDeletedBy()
         );
     }
 
@@ -30,6 +31,7 @@ public final class WorkspaceEntityMapper {
         entity.setCreatedAt(workspace.getCreatedAt());
         entity.setUpdatedAt(workspace.getUpdatedAt());
         entity.setDeletedAt(workspace.getDeletedAt());
+        entity.setDeletedBy(workspace.getDeletedBy());
         if (isNew) {
             entity.markNew();
         }

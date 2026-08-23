@@ -16,6 +16,7 @@ public class Workspace {
     private final Instant createdAt;
     private Instant updatedAt;
     private Instant deletedAt;
+    private UUID deletedBy;
 
     public static Workspace create(String name, String slug, UUID ownerId) {
         Instant now = Instant.now();
@@ -26,6 +27,7 @@ public class Workspace {
                 ownerId,
                 now,
                 now,
+                null,
                 null
         );
     }
@@ -45,9 +47,10 @@ public class Workspace {
     }
 
     // Soft delete: the row stays for the audit trail, and the partial index frees the slug.
-    public void delete() {
+    public void delete(UUID actorId) {
         if (deletedAt == null) {
             this.deletedAt = Instant.now();
+            this.deletedBy = actorId;
             this.touch();
         }
     }
