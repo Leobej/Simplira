@@ -1,0 +1,36 @@
+meta {
+  name: Create status
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/statuses
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "In Review",
+    "category": "IN_PROGRESS",
+    "color": "#F59E0B"
+  }
+}
+
+vars:post-response {
+  statusId: res.body.data.id
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Added at the end of the board. Pick the category by what the status means to the system, not by
+  its name: "In Review" and "Blocked" are both IN_PROGRESS, because neither counts as finished.
+}

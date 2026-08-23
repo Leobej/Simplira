@@ -1,0 +1,39 @@
+meta {
+  name: Create issue type
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/issue-types
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Spike",
+    "icon": "flask",
+    "color": "#8B5CF6"
+  }
+}
+
+vars:post-response {
+  issueTypeId: res.body.data.id
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Workspace ADMIN or TEAM_LEADER on the project. Names are unique per project - a second "Bug"
+  is 409 NAME_ALREADY_EXISTS.
+
+  Send "isDefault": true to make this the type new issues get; the previous default is cleared
+  automatically, since exactly one is allowed.
+}

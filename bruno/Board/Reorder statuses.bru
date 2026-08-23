@@ -1,0 +1,34 @@
+meta {
+  name: Reorder statuses
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/statuses/reorder
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "statusIds": []
+  }
+}
+
+assert {
+  res.status: eq 409
+}
+
+docs {
+  Send every status id in the project, in the order they should appear on the board. A partial
+  list is 409 INCOMPLETE_STATUS_ORDER - positions are unique per project, so a half order would
+  leave statuses holding positions the reorder is trying to hand out.
+
+  The empty list above is deliberate: run List statuses, paste the ids in the order you want, and
+  the assert changes to 200. Left failing so nobody runs it by accident and shuffles their board.
+}

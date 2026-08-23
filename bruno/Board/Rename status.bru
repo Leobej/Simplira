@@ -1,0 +1,33 @@
+meta {
+  name: Rename status
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/statuses/{{statusId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Needs Review"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Run Create status first - it captures statusId.
+
+  Changing "category" is a different thing entirely: it changes what the status means. Moving the
+  only DONE status out of DONE is refused with 409 LAST_STATUS_IN_CATEGORY, otherwise the project
+  would have no way to finish anything.
+}

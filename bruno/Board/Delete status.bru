@@ -1,0 +1,24 @@
+meta {
+  name: Delete status
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/statuses/{{statusId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Soft delete, which also frees the name and position for reuse.
+
+  Refused when it is the last status in its category, or when it is the default new issues land
+  on - hand the default to another status first.
+
+  Once issues exist, deleting a status that is in use will also require migrateToStatusId (§33).
+}

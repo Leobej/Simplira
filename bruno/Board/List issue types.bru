@@ -1,0 +1,23 @@
+meta {
+  name: List issue types
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/issue-types
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.length: eq 3
+}
+
+docs {
+  A new project already has Task, Bug and Story - copied from the template table when the project
+  was created, because a project with no types could not hold an issue.
+
+  They are copies, not references: renaming Bug here changes nothing in any other project.
+}

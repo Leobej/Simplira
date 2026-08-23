@@ -53,6 +53,13 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Sprints 5 | Start sprint | 200 — one ACTIVE sprint per project |
 | Sprints 6 | Close sprint | 200 — issue movement lands with the issues slice |
 | Sprints 7 | Delete sprint | 204 — close it first if ACTIVE |
+| Board 1 | List issue types | 200 — Task, Bug, Story, seeded with the project |
+| Board 2 | Create issue type | 201 — names unique per project |
+| Board 3 | List statuses | 200 — To Do, In Progress, Done with categories |
+| Board 4 | Create status | 201 — captures `statusId`; added at the end |
+| Board 5 | Rename status | 200 — the label changes, the category is the meaning |
+| Board 6 | Reorder statuses | 409 until you paste the full id list in |
+| Board 7 | Delete status | 204 — not the last in a category, not the default |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection
