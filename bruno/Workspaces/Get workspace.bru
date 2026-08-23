@@ -1,0 +1,22 @@
+meta {
+  name: Get workspace
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Run Create workspace first - it captures workspaceId.
+
+  A non-member gets 404 WORKSPACE_NOT_FOUND here rather than 403. A 403 would confirm that the
+  id belongs to a real workspace, which is exactly what an id-guessing attacker wants.
+}

@@ -1,0 +1,20 @@
+meta {
+  name: List my workspaces
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/workspaces
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+}
+
+docs {
+  Only workspaces you are a member of, newest last. Soft-deleted ones never appear.
+}

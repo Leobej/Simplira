@@ -1,0 +1,33 @@
+meta {
+  name: Update workspace
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Acme Technologies"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.name: eq Acme Technologies
+}
+
+docs {
+  PATCH semantics: omitted fields are left alone, never cleared. Send "slug" to rename the
+  address; a taken slug answers 409 SLUG_ALREADY_EXISTS.
+
+  ADMIN only. A DEVELOPER or TEAM_LEADER gets 403 FORBIDDEN.
+}

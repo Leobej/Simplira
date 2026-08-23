@@ -1,0 +1,41 @@
+meta {
+  name: Create workspace
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/workspaces
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Acme Tech"
+  }
+}
+
+vars:post-response {
+  workspaceId: res.body.data.id
+}
+
+assert {
+  res.status: eq 201
+  res.body.data.slug: eq acme-tech
+}
+
+docs {
+  The slug is derived from the name. Creating this twice does not fail - the second one becomes
+  acme-tech-2, so only the first run matches the slug assert above.
+
+  The creator becomes both the owner and the first ADMIN, which is why the member list below
+  already has an entry with no invitation involved.
+
+  Send "slug" explicitly to choose your own; that form conflicts with 409 instead of suffixing,
+  because an address you asked for by name should not be silently changed.
+}

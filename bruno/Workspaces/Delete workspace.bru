@@ -1,0 +1,25 @@
+meta {
+  name: Delete workspace
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Soft delete: the row stays for the audit trail and the workspace disappears from every read.
+
+  The slug becomes available again immediately, because the unique index only covers rows where
+  deleted_at IS NULL. Run Create workspace again afterwards and it takes acme-tech back rather
+  than becoming acme-tech-2.
+
+  ADMIN only.
+}

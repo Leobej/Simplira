@@ -1,0 +1,28 @@
+meta {
+  name: Search members
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/members/search?q=de&limit=10
+  body: none
+  auth: inherit
+}
+
+params:query {
+  q: de
+  limit: 10
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Feeds the assignee picker and @mention autocomplete. Matches full name or email, case
+  insensitive.
+
+  Under two characters it returns an empty list rather than the whole workspace, so an
+  autocomplete firing on the first keystroke costs nothing.
+}
