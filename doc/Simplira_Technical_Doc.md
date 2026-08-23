@@ -801,13 +801,17 @@ Can user access project?
 ```
 POST   /api/v1/auth/register          🌐 Register new user
 POST   /api/v1/auth/login             🌐 Login, returns JWT
-POST   /api/v1/auth/logout            🔓 Invalidate token
-POST   /api/v1/auth/refresh           🔓 Refresh JWT token
+POST   /api/v1/auth/logout            🌐 Revoke the refresh token (cookie is the credential)
+POST   /api/v1/auth/refresh           🌐 Rotate the refresh token, issue a new access token
 POST   /api/v1/auth/forgot-password   🌐 Send reset email
 POST   /api/v1/auth/reset-password    🌐 Reset with token
 POST   /api/v1/auth/verify-email          🌐 Verify email address
 POST   /api/v1/auth/resend-verification   🌐 Resend verification email
 ```
+
+> `refresh` and `logout` are public rather than authenticated. Both are called with an access
+> token that has usually already expired, so requiring a valid one would deadlock the flow — the
+> refresh cookie is their credential, and it is verified by hash against `refresh_tokens`.
 
 ### User Endpoints
 
@@ -4586,9 +4590,11 @@ Omitting `.httpBasic()` and `.formLogin()` removes the default login page and ba
 As the public endpoint list in §6 grows (forgot-password, reset-password, verify-email,
 accept-invitation, WebSocket handshake), extend the `permitAll` matchers accordingly.
 
-**List public endpoints individually — never `/api/v1/auth/**`.** That wildcard also opens
-`logout` and `refresh`, which §7 marks as authenticated, so the endpoints would ship public the
-day they are added and nothing would fail to warn you.
+**List public endpoints individually — never `/api/v1/auth/**`.** Every auth endpoint in §7 is
+public today, so the wildcard would happen to be correct right now; that is exactly what makes it
+dangerous. Anything added under `/auth` later — session listing, an admin-only operation — ships
+public on the day it is written, and nothing fails to warn you. An explicit list turns that into a
+403 the first time you call the new endpoint, which is the failure you want.
 
 **The entry point is what produces a 401.** Without `.exceptionHandling(...)`, a stateless chain
 falls back to `Http403ForbiddenEntryPoint` and answers every unauthenticated request with a
