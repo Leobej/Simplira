@@ -1219,6 +1219,9 @@ domain/
 │   └── audit/
 │       ├── AuditLog.java
 │       └── AuditAction.java
+├── port/
+│   ├── PasswordHasher.java
+│   └── AccessTokenIssuer.java
 ├── repository/
 │   ├── UserRepository.java
 │   ├── RefreshTokenRepository.java
@@ -1340,10 +1343,15 @@ infrastructure/
 │       ├── invitation.html
 │       ├── password-reset.html
 │       └── notification.html
+├── config/
+│   └── DomainServiceConfig.java         ← beans for the framework-free domain services
 └── security/
-    ├── JwtService.java
+    ├── JwtService.java                  ← implements the domain AccessTokenIssuer port
     ├── JwtAuthenticationFilter.java
     ├── SecurityConfig.java
+    ├── RestAuthenticationEntryPoint.java ← 401 in the standard error envelope
+    ├── PasswordConfig.java
+    ├── BCryptPasswordHasher.java        ← implements the domain PasswordHasher port
     ├── SimpliraUserDetails.java
     └── AuthorizationService.java
 ```
@@ -1375,6 +1383,7 @@ shared/
 ```
 resources/db/migration/   ← CANONICAL LIST (supersedes the drafts in §32 and §33)
 ├── V1__create_users.sql                       -- includes email_verified
+├── V1_1__users_timestamptz.sql                -- timestamptz, named email constraint
 ├── V2__create_refresh_tokens.sql
 ├── V3__create_email_verification_tokens.sql
 ├── V4__create_workspaces.sql                  -- slug uses a partial unique index (§21)
@@ -3708,13 +3717,29 @@ management:
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
 ```
 
 ```dockerfile
-HEALTHCHECK --interval=30s --timeout=10s --retries=3   CMD curl -f http://localhost:8080/actuator/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --retries=3   CMD curl -f http://localhost:8080/actuator/health/liveness || exit 1
 ```
 
-Response: `GET /actuator/health → { "status": "UP" }`
+Response: `GET /actuator/health/liveness → { "status": "UP" }`
+
+**Why liveness and not the aggregate.** `/actuator/health` sums up every component, and
+`spring-boot-starter-amqp` contributes a `rabbit` indicator. With RabbitMQ unreachable the
+aggregate reports `DOWN` and the endpoint answers **503** — so a container health check pointed at
+it restarts a perfectly healthy API every time the broker blips. Liveness answers "is this process
+still working," ignores external dependencies, and is the correct signal for restart decisions.
+Keep the aggregate for dashboards and alerting, where "Rabbit is down" is exactly what you want to
+see.
+
+`management.endpoint.health.probes.enabled=true` makes the `liveness` and `readiness` groups exist
+outside Kubernetes, where Spring Boot would otherwise only enable them on detecting the platform.
+
+**Both paths must be public** (§37.8): the health check curls them with no credentials, and behind
+`anyRequest().authenticated()` the container is unhealthy forever.
 
 ---
 
@@ -4315,25 +4340,48 @@ public class UserEntity implements Persistable<UUID> {
 }
 ```
 
-The mapper sets the flag when converting a domain object destined for insert:
+The mapper cannot answer "is this new?" on its own — a domain object looks identical whether it
+has been persisted before or not. The flag is passed in:
 
 ```java
-public static UserEntity toEntity(User user) {
+// isNew drives Persistable#isNew(): true means INSERT, false means UPDATE.
+public static UserEntity toEntity(User user, boolean isNew) {
     UserEntity entity = new UserEntity();
     // ... field copies ...
-    entity.markNew();
+    if (isNew) {
+        entity.markNew();
+    }
     return entity;
 }
 ```
 
-`isNew() == true` → Spring Data calls `persist()` → INSERT. Correct behavior restored.
+and the adapter — the only layer that can check — decides:
+
+```java
+@Override
+public User save(User user) {
+    boolean isNew = !jpaRepository.existsById(user.getId());
+    UserEntity entity = UserEntityMapper.toEntity(user, isNew);
+    return UserEntityMapper.toDomain(jpaRepository.saveAndFlush(entity));
+}
+```
+
+`isNew() == true` → `persist()` → INSERT. `isNew() == false` → `merge()` → UPDATE.
+
+> **The trap on the other side.** An earlier version of this mapper called `markNew()`
+> unconditionally. That fixes registration and silently breaks every update: `markEmailVerified()`
+> or `changeName()` followed by `save()` fires an INSERT against a primary key that already
+> exists. Registration is the only path the first slice exercises, so nothing fails until the
+> second one. The fix costs one indexed PK lookup per save — the same round trip `merge()` would
+> have made anyway.
 
 **Rejected alternative:** keep `@GeneratedValue(strategy = GenerationType.UUID)` and have the
 domain pass `null` for the id. Simpler, but domain objects then have no identity until saved,
 which breaks any logic that references an unsaved aggregate. Domain-owned identity is the better
 fit for hexagonal and is the project standard.
 
-> Apply this pattern to **every** aggregate with a domain-assigned UUID PK. The database
+> Apply this pattern to **every** aggregate with a domain-assigned UUID PK — the flag on the
+> mapper *and* the decision in the adapter, never the flag alone. The database
 > `DEFAULT gen_random_uuid()` remains in the DDL as a harmless fallback that will not normally
 > fire.
 
@@ -4381,7 +4429,7 @@ domain model is the one place worth writing by hand.
 public final class UserEntityMapper {
     private UserEntityMapper() {}
     public static User toDomain(UserEntity e) { return new User(e.getId(), ...); }
-    public static UserEntity toEntity(User u) { /* setters + markNew() */ }
+    public static UserEntity toEntity(User u, boolean isNew) { /* setters, markNew() only when isNew */ }
 }
 ```
 
@@ -4404,9 +4452,8 @@ for domain ↔ response DTO, where both sides are flat data holders.
 
 ### 37.6 Password Handling
 
-The `PasswordEncoder` bean lives in infrastructure, and hashing happens in the **service**, never
-in the domain model. `User.register()` accepts an already-hashed string it treats as opaque —
-that keeps BCrypt (an infrastructure concern) out of the pure domain.
+Hashing happens in the **service**, never in the domain model. `User.register()` accepts an
+already-hashed string it treats as opaque — that keeps BCrypt out of the pure domain.
 
 ```java
 @Configuration
@@ -4418,14 +4465,53 @@ public class PasswordConfig {
 }
 ```
 
+That service lives in `domain/`, though, and `PasswordEncoder` is a Spring Security type —
+injecting it directly is exactly the `domain → infrastructure` dependency §3 forbids. The domain
+declares a port; infrastructure implements it:
+
 ```java
-String hashed = passwordEncoder.encode(rawPassword);
+// domain/port/PasswordHasher.java — pure Java, no Spring
+public interface PasswordHasher {
+    String hash(String rawPassword);
+    boolean matches(String rawPassword, String hashedPassword);
+}
+```
+
+```java
+// infrastructure/security/BCryptPasswordHasher.java
+@Component
+public class BCryptPasswordHasher implements PasswordHasher {
+    private final PasswordEncoder passwordEncoder;    // constructor omitted
+    public String hash(String raw)                     { return passwordEncoder.encode(raw); }
+    public boolean matches(String raw, String hashed)  { return passwordEncoder.matches(raw, hashed); }
+}
+```
+
+```java
+String hashed = passwordHasher.hash(rawPassword);
 User user = User.register(email, hashed, fullName);
+```
+
+`AccessTokenIssuer` is the same shape for JWTs, keeping `JwtService` out of the domain. A domain
+service carries no `@Service`, so it cannot be component-scanned — declare it as a bean instead:
+
+```java
+@Configuration
+public class DomainServiceConfig {
+    @Bean
+    public AuthService authService(UserRepository userRepository,
+                                   PasswordHasher passwordHasher,
+                                   AccessTokenIssuer accessTokenIssuer) {
+        return new AuthService(userRepository, passwordHasher, accessTokenIssuer);
+    }
+}
 ```
 
 **Verification uses `matches(raw, hash)` — never re-hash and string-compare.** BCrypt embeds a
 random salt per hash, so `encode()` on the same password twice produces different output.
-`matches()` extracts the salt and performs a constant-time comparison.
+`matches()` extracts the salt and performs a constant-time comparison. BCrypt also ignores
+anything past 72 bytes, so `RegisterRequest` caps the password at 72 characters rather than
+letting a longer one be silently truncated to something the user never typed.
 
 ---
 
@@ -4452,6 +4538,12 @@ before insert gives a clean `409 EMAIL_ALREADY_EXISTS`; the `UNIQUE` constraint 
 is the actual correctness backstop against the race where two simultaneous registrations both
 pass the check. UX from the check, correctness from the constraint.
 
+That backstop only produces a 409 if someone translates it. An unhandled
+`DataIntegrityViolationException` surfaces as a 500, so the repository adapter catches the
+`uq_users_email` violation and rethrows `EmailAlreadyExistsException` — the loser of the race gets
+the same response as anyone who simply registered twice. Name the constraint in the migration;
+matching on a message string is fragile.
+
 ---
 
 ### 37.8 Security Configuration
@@ -4466,10 +4558,9 @@ endpoint — including `/auth/login` itself, making authentication impossible. T
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-    }
+    // constructor omitted
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -4477,8 +4568,13 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())                    // bearer tokens, no session cookies
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
+                .requestMatchers(HttpMethod.POST,
+                    "/api/v1/auth/register",
+                    "/api/v1/auth/login").permitAll()
+                .requestMatchers(HttpMethod.GET,
+                    "/actuator/health", "/actuator/health/**").permitAll()
                 .anyRequest().authenticated())
+            .exceptionHandling(e -> e.authenticationEntryPoint(authenticationEntryPoint))
             .addFilterBefore(jwtAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter.class);
         return http.build();
@@ -4490,38 +4586,68 @@ Omitting `.httpBasic()` and `.formLogin()` removes the default login page and ba
 As the public endpoint list in §6 grows (forgot-password, reset-password, verify-email,
 accept-invitation, WebSocket handshake), extend the `permitAll` matchers accordingly.
 
+**List public endpoints individually — never `/api/v1/auth/**`.** That wildcard also opens
+`logout` and `refresh`, which §7 marks as authenticated, so the endpoints would ship public the
+day they are added and nothing would fail to warn you.
+
+**The entry point is what produces a 401.** Without `.exceptionHandling(...)`, a stateless chain
+falls back to `Http403ForbiddenEntryPoint` and answers every unauthenticated request with a
+bodiless **403**. `RestAuthenticationEntryPoint` writes the standard envelope instead:
+
+```java
+response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+objectMapper.writeValue(response.getOutputStream(),
+        ApiResponse.failure(ErrorResponse.of("UNAUTHENTICATED", "Authentication required")));
+```
+
+> Spring Boot 4 ships **Jackson 3**, so that `ObjectMapper` is `tools.jackson.databind.ObjectMapper`.
+> There is no `com.fasterxml.jackson.databind.ObjectMapper` bean to inject — only the annotations
+> kept their old package.
+
+**`/actuator/health` has to stay public.** The `HEALTHCHECK` in §30 curls it with no credentials;
+behind `anyRequest().authenticated()` the container reports unhealthy forever. Only `health` is
+opened — the remaining actuator endpoints stay authenticated.
+
 ---
 
 ### 37.9 JWT Authentication Filter
 
 Extends `OncePerRequestFilter` (guarantees single execution per request even across
 forwards/includes). The filter **only populates** the security context — it never rejects.
-Rejection is left to the authorization rules, which produce the 401 when the context is empty.
+Rejection is left to the authorization rules, and what they return depends on the entry point
+configured in §37.8: with none configured, Spring Security answers a bodiless **403**, not the
+401 an API should send.
 
 ```java
 String header = request.getHeader("Authorization");
 if (header == null || !header.startsWith("Bearer ")) {
-        filterChain.doFilter(request, response);    // no token → continue, don't reject
+    filterChain.doFilter(request, response);    // no token → continue, don't reject
     return;
-            }
+}
 String token = header.substring(7);
 
-if (jwtService.isValid(token)
-        && SecurityContextHolder.getContext().getAuthentication() == null) {
-UUID userId = jwtService.extractUserId(token);
-    userRepository.findById(userId).ifPresent(user -> {
-var authentication = new UsernamePasswordAuthenticationToken(
-        user,        // principal = the domain User
-        null,        // credentials not needed post-auth
-        List.of()    // authorities empty by design — see below
-);
-        authentication.setDetails(
-            new WebAuthenticationDetailsSource().buildDetails(request));
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-    });
-            }
-            filterChain.doFilter(request, response);
+if (SecurityContextHolder.getContext().getAuthentication() == null) {
+    jwtService.resolveUserId(token)             // one parse: verify and extract together
+            .flatMap(userRepository::findById)
+            .ifPresent(user -> {
+                var authentication = new UsernamePasswordAuthenticationToken(
+                        user,        // principal = the domain User
+                        null,        // credentials not needed post-auth
+                        List.of()    // authorities empty by design — see below
+                );
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            });
+}
+filterChain.doFilter(request, response);
 ```
+
+`resolveUserId` returns `Optional<UUID>` and swallows every parse failure, so an expired,
+tampered or malformed token follows the same path as no token at all. Validating with
+`isValid(token)` and then calling `extractUserId(token)` verifies the signature twice on every
+authenticated request.
 
 **Authorities are deliberately empty.** Per §6, roles are never carried in the JWT — they are
 workspace-scoped and fetched from the database per request via `AuthorizationService`. No
@@ -4588,6 +4714,7 @@ and produce HTTP concerns.
 |---|---|---|
 | `EmailAlreadyExistsException` | 409 | `EMAIL_ALREADY_EXISTS` |
 | `InvalidCredentialsException` | 401 | `INVALID_CREDENTIALS` |
+| missing or invalid token (entry point) | 401 | `UNAUTHENTICATED` |
 | `MethodArgumentNotValidException` | 400 | `VALIDATION_FAILED` (+ field details) |
 | `OptimisticLockException` (§36) | 409 | `ISSUE_VERSION_CONFLICT` |
 

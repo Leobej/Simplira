@@ -34,6 +34,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login").permitAll()
+                        // The container HEALTHCHECK curls this with no credentials.
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions ->

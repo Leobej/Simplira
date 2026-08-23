@@ -1,7 +1,9 @@
-package io.github.leobej.shared.exception;
+package io.github.leobej.application.shared.exception;
 
 import io.github.leobej.application.shared.response.ApiResponse;
 import io.github.leobej.application.shared.response.ErrorResponse;
+import io.github.leobej.shared.exception.EmailAlreadyExistsException;
+import io.github.leobej.shared.exception.InvalidCredentialsException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
