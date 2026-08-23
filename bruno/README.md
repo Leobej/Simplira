@@ -32,9 +32,13 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Workspaces 2 | List my workspaces | 200 — only workspaces you belong to |
 | Workspaces 3 | Get workspace | 200 — a non-member gets 404, not 403 |
 | Workspaces 4 | Update workspace | 200 — ADMIN only |
-| Workspaces 5 | List members | 200 — one ADMIN until invitations exist |
+| Workspaces 5 | List members | 200 — grows once invitations are accepted |
 | Workspaces 6 | Search members | 200 — empty under two characters |
 | Workspaces 7 | Delete workspace | 204 — soft delete; frees the slug for reuse |
+| Invitations 1 | Invite member | 201 — captures `invitationId`; token goes to the log, not the response |
+| Invitations 2 | List invitations | 200 — never includes the token |
+| Invitations 3 | Accept invitation | 200 — needs `invitationToken` pasted from the log |
+| Invitations 4 | Cancel invitation | 204 — the token stops working immediately |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

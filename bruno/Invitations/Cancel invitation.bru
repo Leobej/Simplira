@@ -1,0 +1,20 @@
+meta {
+  name: Cancel invitation
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/invitations/{{invitationId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  ADMIN only. The invitation is deleted outright, so its token stops working immediately and the
+  same address can be invited again.
+}

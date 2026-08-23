@@ -19,6 +19,5 @@ docs {
   Members carry the workspace role, which is per workspace - the same account can be ADMIN here
   and DEVELOPER elsewhere. Roles are never in the JWT; they are read from the database per request.
 
-  Expect exactly one member until invitations exist: there is no endpoint that adds someone to a
-  workspace yet.
+  A new workspace has exactly one member until someone accepts an invitation.
 }

@@ -1,0 +1,35 @@
+meta {
+  name: Accept invitation
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/invitations/accept
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "token": "{{invitationToken}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Paste the token from the application log into the invitationToken environment variable first.
+
+  This runs as whoever is logged in - so to see it properly, register a second account, log in as
+  them, then accept. Accepting as the invited address also flips emailVerified to true, because
+  following a link sent to an address proves control of it.
+
+  A token works exactly once: the second attempt is 409 INVITATION_NOT_USABLE.
+}
