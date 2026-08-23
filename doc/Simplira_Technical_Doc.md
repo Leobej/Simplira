@@ -1418,7 +1418,11 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V6__add_workspace_deleted_by.sql           -- §32: soft delete needs an actor
 ├── V7__create_projects.sql                    -- key partial-unique per workspace, soft delete
 ├── V8__create_project_members.sql             -- TEAM_LEADER or DEVELOPER, never ADMIN
-└── V9__create_sprints.sql                     -- one ACTIVE sprint per project, by partial index
+├── V9__create_sprints.sql                     -- one ACTIVE sprint per project, by partial index
+├── V10__create_default_issue_types.sql        -- template rows (§31)
+├── V11__create_issue_types.sql                -- per project, backfilled for existing ones
+├── V12__create_default_issue_statuses.sql     -- template rows (§33)
+└── V13__create_issue_statuses.sql             -- per project, positions unique per board
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1426,10 +1430,6 @@ applied, so a slot held open for a table built later fails on every database tha
 higher number first. Email verification was originally penciled in as V3 and is a live example.
 
     create_email_verification_tokens.sql
-    create_default_issue_types_table.sql
-    create_issue_types.sql
-    create_default_issue_statuses_table.sql
-    create_issue_statuses.sql
     create_labels.sql
     create_issues.sql                       -- status_id FK, number, version
     create_issue_assignees.sql
@@ -1441,8 +1441,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
     create_notifications.sql
     create_notification_preferences.sql
     create_audit_log.sql
-    seed_default_issue_types.sql
-    seed_default_issue_statuses.sql
     add_indexes.sql
 ```
 
@@ -3814,6 +3812,14 @@ outside Kubernetes, where Spring Boot would otherwise only enable them on detect
 
 ## 31. Default IssueType Seeding
 
+> **As built:** the template table is `default_issue_types` and the copy happens in
+> `ProjectSetupService.seedDefaults`, called by `ProjectService.create` after the creator's
+> membership is written. Statuses (§33) are seeded in the same call, since a project needs both
+> before it can hold an issue.
+>
+> The migration also backfills every project that already existed, because projects created
+> before this slice have no types at all and would reject every issue.
+
 ```sql
 -- V16__create_default_issue_types.sql
 
@@ -3921,6 +3927,19 @@ projectRepository.findByIdAndDeletedAtIsNull(projectId)
 ---
 
 ## 33. Configurable Issue Statuses
+
+> **As built, three deviations worth knowing:**
+>
+> `position` is unique per project among live rows, so the row-by-row reorder loop below would
+> collide the moment two statuses swap. The adapter parks the new order in the negative range
+> first, then flips the whole project back in a single statement.
+>
+> Deleting a status enforces rule 1 (never empty a category) and refuses to remove the default,
+> since new issues need somewhere to land. Rule 2 — migrating issues off the status — is not
+> wired: there are no issues yet. `DeleteStatusRequest.migrateToStatusId` lands with them.
+>
+> Both "one default per project" invariants are backed by partial unique indexes as well as the
+> service check, the same split §37.7 uses elsewhere.
 
 ### Decision
 
