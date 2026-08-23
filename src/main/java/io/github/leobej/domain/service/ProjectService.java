@@ -41,19 +41,22 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final WorkspaceAuthorization workspaceAuthorization;
     private final ProjectAuthorization projectAuthorization;
+    private final ProjectSetupService projectSetupService;
 
     public ProjectService(ProjectRepository projectRepository,
                           ProjectMemberRepository projectMemberRepository,
                           UserWorkspaceRepository userWorkspaceRepository,
                           UserRepository userRepository,
                           WorkspaceAuthorization workspaceAuthorization,
-                          ProjectAuthorization projectAuthorization) {
+                          ProjectAuthorization projectAuthorization,
+                          ProjectSetupService projectSetupService) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
         this.userRepository = userRepository;
         this.workspaceAuthorization = workspaceAuthorization;
         this.projectAuthorization = projectAuthorization;
+        this.projectSetupService = projectSetupService;
     }
 
     public Project create(UUID workspaceId,
@@ -75,6 +78,9 @@ public class ProjectService {
         // Without this the creator of a PRIVATE project would not be a member of it, and only
         // workspace admins could see what they just made.
         projectMemberRepository.save(ProjectMember.add(project.getId(), actorId, ProjectRole.TEAM_LEADER));
+
+        // Without types and statuses the project could not hold an issue (§31, §33).
+        projectSetupService.seedDefaults(project.getId());
         return project;
     }
 

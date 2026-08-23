@@ -4,7 +4,11 @@ import io.github.leobej.domain.port.AccessTokenIssuer;
 import io.github.leobej.domain.port.PasswordHasher;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.port.EmailService;
+import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
+import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
+import io.github.leobej.domain.repository.IssueStatusRepository;
+import io.github.leobej.domain.repository.IssueTypeRepository;
 import io.github.leobej.domain.repository.ProjectMemberRepository;
 import io.github.leobej.domain.repository.ProjectRepository;
 import io.github.leobej.domain.repository.SprintRepository;
@@ -13,7 +17,10 @@ import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.InvitationService;
+import io.github.leobej.domain.service.IssueStatusService;
+import io.github.leobej.domain.service.IssueTypeService;
 import io.github.leobej.domain.service.ProjectAuthorization;
+import io.github.leobej.domain.service.ProjectSetupService;
 import io.github.leobej.domain.service.ProjectService;
 import io.github.leobej.domain.service.SprintService;
 import io.github.leobej.domain.service.WorkspaceAuthorization;
@@ -77,14 +84,36 @@ public class DomainServiceConfig {
                                          UserWorkspaceRepository userWorkspaceRepository,
                                          UserRepository userRepository,
                                          WorkspaceAuthorization workspaceAuthorization,
-                                         ProjectAuthorization projectAuthorization) {
+                                         ProjectAuthorization projectAuthorization,
+                                         ProjectSetupService projectSetupService) {
         return new ProjectService(projectRepository, projectMemberRepository, userWorkspaceRepository,
-                userRepository, workspaceAuthorization, projectAuthorization);
+                userRepository, workspaceAuthorization, projectAuthorization, projectSetupService);
     }
 
     @Bean
     public SprintService sprintService(SprintRepository sprintRepository,
                                        ProjectAuthorization projectAuthorization) {
         return new SprintService(sprintRepository, projectAuthorization);
+    }
+
+    @Bean
+    public ProjectSetupService projectSetupService(IssueTypeRepository issueTypeRepository,
+                                                   IssueStatusRepository issueStatusRepository,
+                                                   DefaultIssueTypeRepository defaultIssueTypeRepository,
+                                                   DefaultIssueStatusRepository defaultIssueStatusRepository) {
+        return new ProjectSetupService(issueTypeRepository, issueStatusRepository,
+                defaultIssueTypeRepository, defaultIssueStatusRepository);
+    }
+
+    @Bean
+    public IssueTypeService issueTypeService(IssueTypeRepository issueTypeRepository,
+                                             ProjectAuthorization projectAuthorization) {
+        return new IssueTypeService(issueTypeRepository, projectAuthorization);
+    }
+
+    @Bean
+    public IssueStatusService issueStatusService(IssueStatusRepository issueStatusRepository,
+                                                 ProjectAuthorization projectAuthorization) {
+        return new IssueStatusService(issueStatusRepository, projectAuthorization);
     }
 }

@@ -5,6 +5,10 @@ import io.github.leobej.application.shared.response.ErrorResponse;
 import io.github.leobej.shared.exception.EmailAlreadyExistsException;
 import io.github.leobej.shared.exception.InvalidCredentialsException;
 import io.github.leobej.shared.exception.AlreadyMemberException;
+import io.github.leobej.shared.exception.BusinessRuleException;
+import io.github.leobej.shared.exception.DuplicateNameException;
+import io.github.leobej.shared.exception.IssueStatusNotFoundException;
+import io.github.leobej.shared.exception.IssueTypeNotFoundException;
 import io.github.leobej.shared.exception.DuplicateInvitationException;
 import io.github.leobej.shared.exception.ForbiddenException;
 import io.github.leobej.shared.exception.InvitationNotFoundException;
@@ -154,5 +158,30 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleInvalidSprintDates(InvalidSprintDatesException ex) {
         return ApiResponse.failure(ErrorResponse.of("INVALID_SPRINT_DATES", ex.getMessage()));
+    }
+
+    @ExceptionHandler(IssueTypeNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleIssueTypeNotFound(IssueTypeNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("ISSUE_TYPE_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(IssueStatusNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleIssueStatusNotFound(IssueStatusNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("ISSUE_STATUS_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateNameException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleDuplicateName(DuplicateNameException ex) {
+        return ApiResponse.failure(ErrorResponse.of("NAME_ALREADY_EXISTS", ex.getMessage()));
+    }
+
+    // Carries its own code so a rule can be added without a handler each time.
+    @ExceptionHandler(BusinessRuleException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleBusinessRule(BusinessRuleException ex) {
+        return ApiResponse.failure(ErrorResponse.of(ex.getCode(), ex.getMessage()));
     }
 }
