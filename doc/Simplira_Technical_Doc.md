@@ -1189,7 +1189,9 @@ domain/
 │   │   └── RefreshToken.java
 │   ├── workspace/
 │   │   ├── Workspace.java
-│   │   └── UserWorkspace.java
+│   │   ├── UserWorkspace.java
+│   │   ├── WorkspaceRole.java
+│   │   └── WorkspaceMember.java    ← a membership joined with the user behind it
 │   ├── project/
 │   │   ├── Project.java
 │   │   ├── ProjectMember.java
@@ -1385,35 +1387,41 @@ shared/
 ### Database Migrations (Flyway)
 
 ```
-resources/db/migration/   ← CANONICAL LIST (supersedes the drafts in §32 and §33)
+resources/db/migration/   ← APPLIED, in the order the slices were actually built
 ├── V1__create_users.sql                       -- includes email_verified
 ├── V1_1__users_timestamptz.sql                -- timestamptz, named email constraint
 ├── V2__create_refresh_tokens.sql
-├── V3__create_email_verification_tokens.sql
-├── V4__create_workspaces.sql                  -- slug uses a partial unique index (§21)
-├── V5__create_user_workspaces.sql
-├── V6__create_invitations.sql
-├── V7__create_projects.sql                    -- includes key, soft-delete columns
-├── V8__create_project_members.sql
-├── V9__create_default_issue_types_table.sql
-├── V10__create_issue_types.sql
-├── V11__create_default_issue_statuses_table.sql
-├── V12__create_issue_statuses.sql
-├── V13__create_sprints.sql
-├── V14__create_labels.sql
-├── V15__create_issues.sql                     -- status_id FK, number, version
-├── V16__create_issue_assignees.sql
-├── V17__create_issue_links.sql
-├── V18__create_issue_labels.sql
-├── V19__create_comments.sql
-├── V20__create_comment_mentions.sql
-├── V21__create_attachments.sql
-├── V22__create_notifications.sql
-├── V23__create_notification_preferences.sql
-├── V24__create_audit_log.sql
-├── V25__seed_default_issue_types.sql
-├── V26__seed_default_issue_statuses.sql
-└── V27__add_indexes.sql
+├── V3__create_workspaces.sql                  -- slug uses a partial unique index (§21)
+└── V4__create_user_workspaces.sql             -- role VARCHAR + CHECK, unique per (user, workspace)
+
+STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
+Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
+applied, so a slot held open for a table built later fails on every database that ran the
+higher number first. Email verification was originally penciled in as V3 and is a live example.
+
+    create_email_verification_tokens.sql
+    create_invitations.sql
+    create_projects.sql                     -- includes key, soft-delete columns
+    create_project_members.sql
+    create_default_issue_types_table.sql
+    create_issue_types.sql
+    create_default_issue_statuses_table.sql
+    create_issue_statuses.sql
+    create_sprints.sql
+    create_labels.sql
+    create_issues.sql                       -- status_id FK, number, version
+    create_issue_assignees.sql
+    create_issue_links.sql
+    create_issue_labels.sql
+    create_comments.sql
+    create_comment_mentions.sql
+    create_attachments.sql
+    create_notifications.sql
+    create_notification_preferences.sql
+    create_audit_log.sql
+    seed_default_issue_types.sql
+    seed_default_issue_statuses.sql
+    add_indexes.sql
 ```
 
 > Each file runs exactly once, never edited retroactively.
@@ -3494,6 +3502,12 @@ GET /api/v1/projects/{projectId}/members/search?q=john&limit=10        👤
 
 Project-scoped search needed for private projects — only show members who have access.
 Minimum 2 characters before searching — enforced in both frontend and backend.
+
+> **As built:** `WorkspaceService.searchMembers` loads the workspace's members and filters them in
+> memory rather than running the SQL below. At tens of members that is one query instead of two and
+> the list is already needed for the member endpoints. The SQL is the upgrade path, and the moment
+> to take it is when a workspace grows large enough that loading every member to return ten is
+> wasteful.
 
 **Response:**
 
