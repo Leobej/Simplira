@@ -4,6 +4,7 @@ import io.github.leobej.application.shared.response.ApiResponse;
 import io.github.leobej.application.shared.response.ErrorResponse;
 import io.github.leobej.shared.exception.EmailAlreadyExistsException;
 import io.github.leobej.shared.exception.InvalidCredentialsException;
+import io.github.leobej.shared.exception.InvalidRefreshTokenException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -35,5 +36,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Void> handleInvalidCredentials(InvalidCredentialsException ex) {
         return ApiResponse.failure(ErrorResponse.of("INVALID_CREDENTIALS", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiResponse<Void> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_REFRESH_TOKEN", ex.getMessage()));
     }
 }
