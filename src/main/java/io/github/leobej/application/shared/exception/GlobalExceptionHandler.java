@@ -4,7 +4,11 @@ import io.github.leobej.application.shared.response.ApiResponse;
 import io.github.leobej.application.shared.response.ErrorResponse;
 import io.github.leobej.shared.exception.EmailAlreadyExistsException;
 import io.github.leobej.shared.exception.InvalidCredentialsException;
+import io.github.leobej.shared.exception.ForbiddenException;
 import io.github.leobej.shared.exception.InvalidRefreshTokenException;
+import io.github.leobej.shared.exception.SlugAlreadyExistsException;
+import io.github.leobej.shared.exception.WorkspaceMemberNotFoundException;
+import io.github.leobej.shared.exception.WorkspaceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -42,5 +46,29 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Void> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
         return ApiResponse.failure(ErrorResponse.of("INVALID_REFRESH_TOKEN", ex.getMessage()));
+    }
+
+    @ExceptionHandler(WorkspaceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleWorkspaceNotFound(WorkspaceNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("WORKSPACE_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(WorkspaceMemberNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleMemberNotFound(WorkspaceMemberNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("MEMBER_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Void> handleForbidden(ForbiddenException ex) {
+        return ApiResponse.failure(ErrorResponse.of("FORBIDDEN", ex.getMessage()));
+    }
+
+    @ExceptionHandler(SlugAlreadyExistsException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleSlugTaken(SlugAlreadyExistsException ex) {
+        return ApiResponse.failure(ErrorResponse.of("SLUG_ALREADY_EXISTS", ex.getMessage()));
     }
 }

@@ -4,7 +4,10 @@ import io.github.leobej.domain.port.AccessTokenIssuer;
 import io.github.leobej.domain.port.PasswordHasher;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.repository.UserRepository;
+import io.github.leobej.domain.repository.UserWorkspaceRepository;
+import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AuthService;
+import io.github.leobej.domain.service.WorkspaceService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,5 +27,12 @@ public class DomainServiceConfig {
                                    @Value("${simplira.jwt.refresh-token-expiry}") long refreshTokenExpirySeconds) {
         return new AuthService(userRepository, refreshTokenRepository, passwordHasher,
                 accessTokenIssuer, Duration.ofSeconds(refreshTokenExpirySeconds));
+    }
+
+    @Bean
+    public WorkspaceService workspaceService(WorkspaceRepository workspaceRepository,
+                                             UserWorkspaceRepository userWorkspaceRepository,
+                                             UserRepository userRepository) {
+        return new WorkspaceService(workspaceRepository, userWorkspaceRepository, userRepository);
     }
 }

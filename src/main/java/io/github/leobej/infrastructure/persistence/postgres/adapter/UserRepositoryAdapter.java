@@ -11,6 +11,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
 import java.util.Locale;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -66,5 +68,12 @@ public class UserRepositoryAdapter implements UserRepository {
         }
         String message = ex.getMostSpecificCause().getMessage();
         return message != null && message.toLowerCase(Locale.ROOT).contains(EMAIL_UNIQUE_CONSTRAINT);
+    }
+
+    @Override
+    public List<User> findAllById(Collection<UUID> ids) {
+        return jpaRepository.findAllById(ids).stream()
+                .map(UserEntityMapper::toDomain)
+                .toList();
     }
 }
