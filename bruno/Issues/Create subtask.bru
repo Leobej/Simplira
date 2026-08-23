@@ -1,0 +1,32 @@
+meta {
+  name: Create subtask
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/subtasks
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "Check the mobile breakpoint"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Same body as Create issue; the parent comes from the path.
+
+  One level only - a subtask cannot have subtasks, which is 409 SUBTASK_DEPTH_EXCEEDED. Subtasks
+  never appear in the backlog listing, and deleting the parent deletes them with it.
+}

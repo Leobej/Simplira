@@ -1,0 +1,33 @@
+meta {
+  name: Block issue
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/block
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reason": "Waiting on the staging database"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.blocked: eq true
+}
+
+docs {
+  DELETE on the same path clears it. Blocked issues are findable with ?isBlocked=true on the list
+  endpoints.
+
+  Once issue links exist, a BLOCKS link will set this flag automatically as well.
+}

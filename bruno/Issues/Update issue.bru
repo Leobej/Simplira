@@ -1,0 +1,37 @@
+meta {
+  name: Update issue
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "Login button is misaligned on mobile",
+    "version": 0
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Send the version you last read. Running this twice is 409 ISSUE_VERSION_CONFLICT the second
+  time, because version is now 1 - that is the point: the second editor is told to reload rather
+  than silently overwriting the first.
+
+  Leave version out to skip the check.
+
+  Moving statusId to a status in the DONE category also stamps closedAt and closedBy; moving back
+  out clears them. It follows the category, so renaming Done to Shipped changes nothing.
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Get issue by identifier
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/issues/SB-1
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  What a shared link resolves: SB-1 rather than a UUID. The key half is matched case
+  insensitively, so sb-1 works too.
+
+  Change SB to whatever key Projects/Create project returned if you used a different name.
+}

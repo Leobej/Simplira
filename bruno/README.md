@@ -60,6 +60,14 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Board 5 | Rename status | 200 — the label changes, the category is the meaning |
 | Board 6 | Reorder statuses | 409 until you paste the full id list in |
 | Board 7 | Delete status | 204 — not the last in a category, not the default |
+| Issues 1 | Create issue | 201 — captures `issueId`; project defaults fill type and status |
+| Issues 2 | List backlog | 200 — filters and paging, `meta` carries the totals |
+| Issues 3 | Get issue by identifier | 200 — SB-1 rather than a UUID |
+| Issues 4 | Update issue | 200 first time, 409 the second — version conflict |
+| Issues 5 | Move to sprint | 200 — needs `sprintId` from the Sprints folder |
+| Issues 6 | Reposition issue | 200 — drop between two cards, no renumbering |
+| Issues 7 | Block issue | 200 — DELETE the same path to clear |
+| Issues 8 | Create subtask | 201 — one level deep only |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

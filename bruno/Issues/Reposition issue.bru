@@ -1,0 +1,34 @@
+meta {
+  name: Reposition issue
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/position
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "previousIssueId": null,
+    "nextIssueId": null
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Drag and drop: name the two cards the issue was dropped between and the server picks a value in
+  the gap between their positions. Nothing else in the column is renumbered.
+
+  Both null, as above, sends it to the end. Positions are floats precisely so a card can be
+  dropped between two neighbours many times before the numbers need normalising.
+}

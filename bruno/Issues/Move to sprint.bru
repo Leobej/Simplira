@@ -1,0 +1,32 @@
+meta {
+  name: Move to sprint
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/move-to-sprint
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "sprintId": "{{sprintId}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Needs workspace ADMIN or TEAM_LEADER on the project, and a sprint from Sprints/Create sprint.
+
+  The issue leaves the backlog and appears in GET /sprints/{sprintId}/issues. A completed sprint
+  is refused. POST /issues/{id}/move-to-backlog sends it back.
+}

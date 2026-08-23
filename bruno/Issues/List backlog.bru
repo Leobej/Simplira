@@ -1,0 +1,30 @@
+meta {
+  name: List backlog
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/issues?priority=HIGH
+  body: none
+  auth: inherit
+}
+
+params:query {
+  priority: HIGH
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Backlog only - issues sitting on a sprint are excluded, as are subtasks, which belong to their
+  parent rather than to the board.
+
+  Filters combine with AND and are all optional: statusCategory, statusId, typeId, priority,
+  reporterId, isBlocked, dueBefore, dueAfter, and q for a text match on title and description.
+  Paging is page and pageSize; the totals come back in the "meta" block.
+
+  assigneeId, unassigned and labelId are not wired yet - assignees and labels do not exist.
+}
