@@ -546,7 +546,7 @@ Invitation
 - email             VARCHAR, NOT NULL
 - role              ENUM(ADMIN, TEAM_LEADER, DEVELOPER), NOT NULL
 - invited_by        UUID, FK → User, NOT NULL
-- token             VARCHAR, UNIQUE, NOT NULL      -- sent in invitation email URL
+- token_hash        VARCHAR, UNIQUE, NOT NULL      -- hashed; the raw token exists only in the email
 - status            ENUM(PENDING, ACCEPTED, EXPIRED), NOT NULL
 - expires_at        TIMESTAMPTZ, NOT NULL            -- 7 days default
 - accepted_by       UUID, FK → User, nullable
@@ -700,6 +700,17 @@ If a revoked token is used, all sessions for that user are terminated (theft det
 4. Gate sensitive actions (creating/joining workspaces, accepting invitations) behind
    `email_verified = true`. Login itself may be allowed, but with reduced capability until verified.
 
+
+> **As built:** `email_verified` is dormant. Nothing writes it except invitation acceptance, and
+> nothing reads it — the gate above is *not* enforced anywhere yet, and cannot be until the
+> verification flow exists. Turning it on first would lock every existing account out of workspace
+> creation, since every row is currently `false`. Build the flow and enable the gate in one slice.
+>
+> **Invitation acceptance verifies the address.** Following a link sent to an address proves
+> control of it, which is exactly what this flow proves — so accepting an invitation sets
+> `email_verified = true`, but only when the accepting account's address matches the invited one.
+> A forwarded invitation still lets someone join; it just tells you nothing about their address.
+
 > Tokens are hashed at rest exactly like refresh tokens — a leaked DB row must not be replayable.
 
 ### Authorization Logic
@@ -848,10 +859,12 @@ DELETE /api/v1/workspaces/{workspaceId}/members/me                  👤 Leave w
 POST   /api/v1/workspaces/{workspaceId}/invitations                 🔑 Send invitation
 GET    /api/v1/workspaces/{workspaceId}/invitations                 🔑 List invitations
 DELETE /api/v1/workspaces/{workspaceId}/invitations/{invitationId}  🔑 Cancel invitation
-POST   /api/v1/invitations/accept                                   🌐 Accept (token in body)
+POST   /api/v1/invitations/accept                                   🔓 Accept (token in body)
 ```
 
-> Accept is public — user may not be registered yet when clicking email link.
+> Accept requires an account: it attaches the invitation to a concrete user, so there has to be
+> one. The emailed link opens a public page that registers or signs in first, then calls this with
+> the token. Accepting also confirms the invitee address (§6).
 
 ### Project Endpoints
 
@@ -1227,7 +1240,8 @@ domain/
 │       └── AuditAction.java
 ├── port/
 │   ├── PasswordHasher.java
-│   └── AccessTokenIssuer.java
+│   ├── AccessTokenIssuer.java
+│   └── EmailService.java            ← a port: domain services send mail
 ├── repository/
 │   ├── UserRepository.java
 │   ├── RefreshTokenRepository.java
@@ -1250,6 +1264,7 @@ domain/
 │   └── AuditLogRepository.java
 └── service/
     ├── AuthService.java
+    ├── WorkspaceAuthorization.java   ← shared workspace permission rules
     ├── UserService.java
     ├── WorkspaceService.java
     ├── ProjectService.java
@@ -1343,7 +1358,7 @@ infrastructure/
 │   ├── StorageService.java     ← interface
 │   └── S3StorageService.java   ← implementation
 ├── email/
-│   ├── EmailService.java       ← interface
+│   ├── LoggingEmailService.java ← stub: logs the link (see §25)
 │   ├── SmtpEmailService.java   ← implementation
 │   └── template/
 │       ├── invitation.html
@@ -1392,7 +1407,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V1_1__users_timestamptz.sql                -- timestamptz, named email constraint
 ├── V2__create_refresh_tokens.sql
 ├── V3__create_workspaces.sql                  -- slug uses a partial unique index (§21)
-└── V4__create_user_workspaces.sql             -- role VARCHAR + CHECK, unique per (user, workspace)
+├── V4__create_user_workspaces.sql             -- role VARCHAR + CHECK, unique per (user, workspace)
+└── V5__create_invitations.sql                 -- token hashed, one pending invite per address
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1400,7 +1416,6 @@ applied, so a slot held open for a table built later fails on every database tha
 higher number first. Email verification was originally penciled in as V3 and is a live example.
 
     create_email_verification_tokens.sql
-    create_invitations.sql
     create_projects.sql                     -- includes key, soft-delete columns
     create_project_members.sql
     create_default_issue_types_table.sql
@@ -3408,6 +3423,21 @@ Useful for sharing links. Resolves identifier to UUID internally.
 ---
 
 ## 25. Email Service
+
+> **As built:** the interface below lives in `domain/port/EmailService.java`, not in
+> `infrastructure/email` — domain services send mail, and the layering rules forbid them importing
+> infrastructure. Implementations stay in `infrastructure/email` and are where link building and
+> provider credentials live, so the domain passes a bare token and never knows a URL.
+>
+> **The queue is deliberately not built yet.** The current sender is `LoggingEmailService`, a stub
+> that writes the link to the log. A stub blocks on nothing, so putting a queue, a consumer and a
+> dead-letter queue in front of it would add infrastructure that cannot be meaningfully tested and
+> would make local development depend on a running broker. Publisher, consumer and DLQ arrive
+> together with real provider credentials — one class swap, since callers only see the port.
+>
+> When that happens, decide what a broker outage means for the request: creating an invitation
+> should *not* fail because mail is queued elsewhere. Persist it, log the failure, and let resend
+> be the recovery path.
 
 ### Choice
 
