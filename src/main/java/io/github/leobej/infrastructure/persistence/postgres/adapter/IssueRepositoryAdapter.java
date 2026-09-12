@@ -4,10 +4,15 @@ import io.github.leobej.domain.model.issue.Issue;
 import io.github.leobej.domain.model.issue.IssueFilter;
 import io.github.leobej.domain.model.issue.IssuePage;
 import io.github.leobej.domain.repository.IssueRepository;
+import io.github.leobej.infrastructure.persistence.postgres.entity.IssueAssigneeEntity;
 import io.github.leobej.infrastructure.persistence.postgres.entity.IssueEntity;
 import io.github.leobej.infrastructure.persistence.postgres.jpa.JpaIssueRepository;
 import io.github.leobej.infrastructure.persistence.postgres.mapper.IssueEntityMapper;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -20,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Repository
 public class IssueRepositoryAdapter implements IssueRepository {
@@ -77,6 +83,19 @@ public class IssueRepositoryAdapter implements IssueRepository {
             if (filter.reporterId() != null) {
                 predicates.add(builder.equal(root.get("reporterId"), filter.reporterId()));
             }
+            // Assignments live in their own table, so these two are EXISTS subqueries rather
+            // than a join - a join would duplicate an issue once per matching assignee and
+            // throw the page count off.
+            if (filter.assigneeId() != null) {
+                predicates.add(builder.exists(assignmentSubquery(root, query, builder,
+                        assignee -> builder.equal(assignee.get("userId"), filter.assigneeId()))));
+            }
+            if (filter.unassigned() != null) {
+                Predicate hasSomeone = builder.exists(
+                        assignmentSubquery(root, query, builder, assignee -> null));
+                // Symmetric with isBlocked: false is "somebody owns this", not "ignore me".
+                predicates.add(filter.unassigned() ? builder.not(hasSomeone) : hasSomeone);
+            }
             if (filter.blocked() != null) {
                 predicates.add(builder.equal(root.get("blocked"), filter.blocked()));
             }
@@ -109,6 +128,19 @@ public class IssueRepositoryAdapter implements IssueRepository {
                 page.getTotalElements(),
                 filter.page(),
                 filter.pageSize());
+    }
+
+    // "this issue has an assignment matching X", with X optional so unassigned can reuse it.
+    private static Subquery<UUID> assignmentSubquery(Root<IssueEntity> issue,
+                                                     CriteriaQuery<?> query,
+                                                     CriteriaBuilder builder,
+                                                     Function<Root<IssueAssigneeEntity>, Predicate> extra) {
+        Subquery<UUID> subquery = query.subquery(UUID.class);
+        Root<IssueAssigneeEntity> assignee = subquery.from(IssueAssigneeEntity.class);
+        Predicate sameIssue = builder.equal(assignee.get("issueId"), issue.get("id"));
+        Predicate condition = extra.apply(assignee);
+        return subquery.select(assignee.get("issueId"))
+                .where(condition == null ? sameIssue : builder.and(sameIssue, condition));
     }
 
     @Override

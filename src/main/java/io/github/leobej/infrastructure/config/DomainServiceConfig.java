@@ -7,6 +7,7 @@ import io.github.leobej.domain.port.EmailService;
 import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
 import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
+import io.github.leobej.domain.repository.IssueAssigneeRepository;
 import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
@@ -121,12 +122,15 @@ public class DomainServiceConfig {
 
     @Bean
     public IssueService issueService(IssueRepository issueRepository,
+                                     IssueAssigneeRepository issueAssigneeRepository,
                                      IssueTypeRepository issueTypeRepository,
                                      IssueStatusRepository issueStatusRepository,
                                      ProjectRepository projectRepository,
                                      SprintRepository sprintRepository,
+                                     UserRepository userRepository,
                                      ProjectAuthorization projectAuthorization) {
-        return new IssueService(issueRepository, issueTypeRepository, issueStatusRepository,
-                projectRepository, sprintRepository, projectAuthorization);
+        return new IssueService(issueRepository, issueAssigneeRepository, issueTypeRepository,
+                issueStatusRepository, projectRepository, sprintRepository, userRepository,
+                projectAuthorization);
     }
 }

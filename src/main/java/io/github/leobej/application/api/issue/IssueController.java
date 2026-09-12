@@ -1,10 +1,12 @@
 package io.github.leobej.application.api.issue;
 
 import io.github.leobej.application.api.issue.request.BlockIssueRequest;
+import io.github.leobej.application.api.issue.request.BulkAssignRequest;
 import io.github.leobej.application.api.issue.request.CreateIssueRequest;
 import io.github.leobej.application.api.issue.request.MoveToSprintRequest;
 import io.github.leobej.application.api.issue.request.RepositionIssueRequest;
 import io.github.leobej.application.api.issue.request.UpdateIssueRequest;
+import io.github.leobej.application.api.issue.response.BulkAssignResponse;
 import io.github.leobej.application.api.issue.response.IssueResponse;
 import io.github.leobej.application.shared.response.ApiResponse;
 import io.github.leobej.application.shared.response.PageMeta;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -126,6 +129,16 @@ public class IssueController {
         return single(issueService.moveToBacklog(issueId, user.getId()));
     }
 
+    // §1: rewriting a batch of other people's workload is a TEAM_LEADER action, unlike
+    // assigning a single issue.
+    @PostMapping("/projects/{projectId}/issues/bulk-assign")
+    public ApiResponse<BulkAssignResponse> bulkAssign(@PathVariable UUID projectId,
+                                                      @Valid @RequestBody BulkAssignRequest request,
+                                                      @CurrentUser User user) {
+        return ApiResponse.success(BulkAssignResponse.from(issueService.bulkAssign(
+                projectId, request.issueIds(), request.userIds(), user.getId())));
+    }
+
     @GetMapping("/issues/{issueId}/subtasks")
     public ApiResponse<List<IssueResponse>> listSubtasks(@PathVariable UUID issueId,
                                                          @CurrentUser User user) {
@@ -133,9 +146,7 @@ public class IssueController {
         String key = subtasks.isEmpty()
                 ? null
                 : issueService.projectKey(subtasks.get(0).getProjectId());
-        return ApiResponse.success(subtasks.stream()
-                .map(subtask -> IssueResponse.from(subtask, key))
-                .toList());
+        return ApiResponse.success(responses(subtasks, key));
     }
 
     @PostMapping("/issues/{issueId}/subtasks")
@@ -150,15 +161,24 @@ public class IssueController {
     }
 
     private ApiResponse<IssueResponse> single(Issue issue) {
-        return ApiResponse.success(
-                IssueResponse.from(issue, issueService.projectKey(issue.getProjectId())));
+        return ApiResponse.success(IssueResponse.from(issue,
+                issueService.projectKey(issue.getProjectId()),
+                issueService.assigneeIdsByIssue(List.of(issue.getId())).get(issue.getId())));
     }
 
     private ApiResponse<List<IssueResponse>> page(IssuePage result, UUID projectId) {
         String key = projectId == null ? null : issueService.projectKey(projectId);
-        return ApiResponse.success(
-                result.items().stream().map(issue -> IssueResponse.from(issue, key)).toList(),
+        return ApiResponse.success(responses(result.items(), key),
                 new PageMeta(result.page(), result.pageSize(), result.total()));
+    }
+
+    // One assignee query for the whole page rather than one per card.
+    private List<IssueResponse> responses(List<Issue> issues, String projectKey) {
+        Map<UUID, List<UUID>> assignees =
+                issueService.assigneeIdsByIssue(issues.stream().map(Issue::getId).toList());
+        return issues.stream()
+                .map(issue -> IssueResponse.from(issue, projectKey, assignees.get(issue.getId())))
+                .toList();
     }
 
     // §34 folds filtering into the list endpoints as query parameters rather than adding new ones.
@@ -168,6 +188,8 @@ public class IssueController {
             UUID typeId,
             IssuePriority priority,
             UUID reporterId,
+            UUID assigneeId,
+            Boolean unassigned,
             Boolean isBlocked,
             LocalDate dueBefore,
             LocalDate dueAfter,
@@ -193,7 +215,8 @@ public class IssueController {
                     : Math.min(pageSize, MAX_PAGE_SIZE);
 
             return new IssueFilter(projectId, sprintId, backlogOnly, statusIds, typeId, priority,
-                    reporterId, isBlocked, dueBefore, dueAfter, q, true, resolvedPage, resolvedSize);
+                    reporterId, assigneeId, unassigned, isBlocked, dueBefore, dueAfter, q, true,
+                    resolvedPage, resolvedSize);
         }
     }
 }

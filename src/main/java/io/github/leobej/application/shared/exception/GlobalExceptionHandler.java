@@ -7,6 +7,7 @@ import io.github.leobej.shared.exception.InvalidCredentialsException;
 import io.github.leobej.shared.exception.AlreadyMemberException;
 import io.github.leobej.shared.exception.BusinessRuleException;
 import io.github.leobej.shared.exception.DuplicateNameException;
+import io.github.leobej.shared.exception.IssueAssigneeNotFoundException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.IssueTypeNotFoundException;
@@ -192,6 +193,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Void> handleIssueNotFound(IssueNotFoundException ex) {
         return ApiResponse.failure(ErrorResponse.of("ISSUE_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(IssueAssigneeNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleIssueAssigneeNotFound(IssueAssigneeNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("ISSUE_ASSIGNEE_NOT_FOUND", ex.getMessage()));
     }
 
     // Two routes to the same conflict: the service catching a stale version the client sent,
