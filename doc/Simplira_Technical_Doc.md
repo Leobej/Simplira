@@ -925,8 +925,16 @@ DELETE /api/v1/issues/{issueId}/block                               👤 Clear b
 PATCH  /api/v1/issues/{issueId}/position                            👤 Update position
 POST   /api/v1/issues/{issueId}/move-to-sprint                      👥 Move to sprint
 POST   /api/v1/issues/{issueId}/move-to-backlog                     👥 Move to backlog
-POST   /api/v1/projects/{projectId}/issues/bulk-assign              👥 Bulk assign issues   -- not built: needs assignees
+POST   /api/v1/projects/{projectId}/issues/bulk-assign              👥 Bulk assign issues
 ```
+
+> **Bulk assign, as built.** `{ "issueIds": [...], "userIds": [...] }`, capped at 100 issues and
+> 20 people per call. It is additive — the named people are added to every listed issue and
+> nobody is taken off — which makes it idempotent, so re-running it after a half-finished call
+> changes nothing. The response is a summary (`issuesTouched`, `assignmentsCreated`,
+> `alreadyAssigned`) rather than a hundred issue objects the client refetches anyway. An issue
+> from another project is 404 rather than silently skipped: the caller was authorized against
+> one project, and the request should not quietly reach past it.
 
 ### Subtask Endpoints
 
@@ -944,6 +952,23 @@ GET    /api/v1/issues/{issueId}/assignees                           👤 List as
 POST   /api/v1/issues/{issueId}/assignees                           👤 Add assignee
 DELETE /api/v1/issues/{issueId}/assignees/{userId}                  👤 Remove assignee
 ```
+
+> **As built.** Adding someone already on the issue is a no-op returning the existing
+> assignment rather than a 409 — two people clicking the same avatar should not produce an
+> error for the slower one. Removing an assignment that is not there is 404
+> `ISSUE_ASSIGNEE_NOT_FOUND`, because that one is a genuine mistake rather than a race.
+>
+> The person being assigned must be able to open the project, or the board would carry work
+> owned by someone who gets a 404 on the issue. A user who is outside the project and a user
+> id that belongs to nobody both answer 409 `ASSIGNEE_WITHOUT_PROJECT_ACCESS`, so the endpoint
+> cannot be used to discover which accounts exist — the same reasoning as §37.7.
+>
+> The check runs on assignment only. Someone dropped from a project keeps the issues they
+> already hold: on a PUBLIC project they can still see them anyway, and silently emptying the
+> assignee list of every issue they touched would lose information the team needs.
+>
+> `IssueResponse` carries `assigneeIds` — ids, not people, resolved in one query per page
+> rather than one per card. The full names and avatars come from the list endpoint above.
 
 ### Issue Link Endpoints
 
@@ -1223,7 +1248,8 @@ domain/
 │   │   ├── IssuePriority.java
 │   │   ├── IssueLink.java
 │   │   ├── IssueLinkType.java
-│   │   └── IssueAssignee.java
+│   │   ├── IssueAssignee.java
+│   │   └── IssueAssigneeView.java   ← assignment joined with the user behind it
 │   ├── comment/
 │   │   ├── Comment.java
 │   │   └── CommentMention.java
@@ -1423,7 +1449,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V11__create_issue_types.sql                -- per project, backfilled for existing ones
 ├── V12__create_default_issue_statuses.sql     -- template rows (§33)
 ├── V13__create_issue_statuses.sql             -- per project, positions unique per board
-└── V14__create_issues.sql                     -- status_id, number, float positions, version
+├── V14__create_issues.sql                     -- status_id, number, float positions, version
+└── V15__create_issue_assignees.sql            -- many per issue, unique per (issue, user)
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1432,7 +1459,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
 
     create_email_verification_tokens.sql
     create_labels.sql
-    create_issue_assignees.sql
     create_issue_links.sql
     create_issue_labels.sql
     create_comments.sql
@@ -4155,8 +4181,12 @@ omits the join-table migrations; the canonical list includes them and is FK-orde
 
 > **As built:** `statusCategory`, `statusId`, `typeId`, `priority`, `reporterId`, `isBlocked`,
 > `dueBefore`, `dueAfter` and `q` all work, on both list endpoints, with `page` and `pageSize`
-> feeding the `meta` block of the envelope. `assigneeId`, `unassigned` and `labelId` are not
-> wired: assignees and labels do not exist yet.
+> feeding the `meta` block of the envelope. `assigneeId` and `unassigned` joined them with the
+> assignee slice; `labelId` is not wired, since labels do not exist yet.
+>
+> Both assignee filters are `EXISTS` subqueries rather than a join to `issue_assignees`: a join
+> would return an issue once per matching assignee and throw the page count off. `unassigned`
+> reads both ways, like `isBlocked` — `true` is "nobody owns this", `false` is "somebody does".
 >
 > Since statuses are per project, a `statusCategory` is resolved to that project's status ids
 > before the query runs rather than joined at the database level — which is also why the sprint
