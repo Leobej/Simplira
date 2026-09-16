@@ -1,0 +1,20 @@
+meta {
+  name: Remove assignee
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/assignees/{{memberUserId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  204 the first time, 404 ISSUE_ASSIGNEE_NOT_FOUND after that. Unlike adding, removing something
+  that was never there is a mistake rather than a race, so it is not swallowed.
+}

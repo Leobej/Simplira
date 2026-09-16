@@ -1,0 +1,38 @@
+meta {
+  name: Bulk assign
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/issues/bulk-assign
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "issueIds": ["{{issueId}}"],
+    "userIds": ["{{memberUserId}}"]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Workspace ADMIN or TEAM_LEADER on the project - rewriting a batch of other people's workload is
+  a leader's call, unlike assigning a single issue. A DEVELOPER gets 403 FORBIDDEN.
+
+  Additive: the listed people are added to every listed issue and nobody is taken off, so running
+  it twice changes nothing. The response counts what happened - issuesTouched, assignmentsCreated,
+  alreadyAssigned.
+
+  Capped at 100 issues and 20 people per call. An issue belonging to another project is 404
+  ISSUE_NOT_FOUND rather than quietly skipped.
+}

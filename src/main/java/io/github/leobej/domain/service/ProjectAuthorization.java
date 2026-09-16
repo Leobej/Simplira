@@ -70,6 +70,16 @@ public class ProjectAuthorization {
         return membership.isAdmin() || project.isPublic() || isProjectMember;
     }
 
+    // The same resolution as requireAccess, answered rather than enforced. Used when the question
+    // is about somebody else - "can this person be assigned?" - where a 404 would be a lie.
+    public boolean hasAccess(UUID projectId, UUID userId) {
+        Project project = requireProject(projectId);
+        return userWorkspaceRepository.find(project.getWorkspaceId(), userId)
+                .map(membership -> canAccess(project, membership,
+                        projectMemberRepository.find(projectId, userId).isPresent()))
+                .orElse(false);
+    }
+
     // projectRole is null for a workspace admin or a plain member reading a PUBLIC project -
     // access does not imply an explicit membership row.
     public record ProjectAccess(Project project, boolean workspaceAdmin, ProjectRole projectRole) {

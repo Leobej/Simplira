@@ -1,6 +1,8 @@
 package io.github.leobej.domain.service;
 
 import io.github.leobej.domain.model.issue.Issue;
+import io.github.leobej.domain.model.issue.IssueAssignee;
+import io.github.leobej.domain.model.issue.IssueAssigneeView;
 import io.github.leobej.domain.model.issue.IssueFilter;
 import io.github.leobej.domain.model.issue.IssuePage;
 import io.github.leobej.domain.model.issue.IssuePriority;
@@ -9,12 +11,16 @@ import io.github.leobej.domain.model.issue.IssueStatusCategory;
 import io.github.leobej.domain.model.issue.IssueType;
 import io.github.leobej.domain.model.project.Project;
 import io.github.leobej.domain.model.sprint.Sprint;
+import io.github.leobej.domain.model.user.User;
+import io.github.leobej.domain.repository.IssueAssigneeRepository;
 import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
 import io.github.leobej.domain.repository.ProjectRepository;
 import io.github.leobej.domain.repository.SprintRepository;
+import io.github.leobej.domain.repository.UserRepository;
 import io.github.leobej.shared.exception.BusinessRuleException;
+import io.github.leobej.shared.exception.IssueAssigneeNotFoundException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
 import io.github.leobej.shared.exception.IssueTypeNotFoundException;
@@ -23,9 +29,15 @@ import io.github.leobej.shared.exception.ProjectNotFoundException;
 import io.github.leobej.shared.exception.SprintNotFoundException;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 // Pure domain: no Spring annotations, no infrastructure imports.
 // Wired as a bean by infrastructure.config.DomainServiceConfig.
@@ -36,23 +48,29 @@ public class IssueService {
     private static final double POSITION_GAP = 1024d;
 
     private final IssueRepository issueRepository;
+    private final IssueAssigneeRepository issueAssigneeRepository;
     private final IssueTypeRepository issueTypeRepository;
     private final IssueStatusRepository issueStatusRepository;
     private final ProjectRepository projectRepository;
     private final SprintRepository sprintRepository;
+    private final UserRepository userRepository;
     private final ProjectAuthorization projectAuthorization;
 
     public IssueService(IssueRepository issueRepository,
+                        IssueAssigneeRepository issueAssigneeRepository,
                         IssueTypeRepository issueTypeRepository,
                         IssueStatusRepository issueStatusRepository,
                         ProjectRepository projectRepository,
                         SprintRepository sprintRepository,
+                        UserRepository userRepository,
                         ProjectAuthorization projectAuthorization) {
         this.issueRepository = issueRepository;
+        this.issueAssigneeRepository = issueAssigneeRepository;
         this.issueTypeRepository = issueTypeRepository;
         this.issueStatusRepository = issueStatusRepository;
         this.projectRepository = projectRepository;
         this.sprintRepository = sprintRepository;
+        this.userRepository = userRepository;
         this.projectAuthorization = projectAuthorization;
     }
 
@@ -131,7 +149,8 @@ public class IssueService {
 
         return issueRepository.search(new IssueFilter(
                 sprint.getProjectId(), sprintId, false, statusIds, template.typeId(),
-                template.priority(), template.reporterId(), template.blocked(), template.dueBefore(),
+                template.priority(), template.reporterId(), template.assigneeId(),
+                template.unassigned(), template.blocked(), template.dueBefore(),
                 template.dueAfter(), template.text(), template.topLevelOnly(),
                 template.page(), template.pageSize()));
     }
@@ -254,6 +273,104 @@ public class IssueService {
         projectAuthorization.requireManage(issue.getProjectId(), actorId);
         issue.moveToBacklog(issueRepository.maxBacklogPosition(issue.getProjectId()) + POSITION_GAP);
         return issueRepository.save(issue);
+    }
+
+    public List<IssueAssigneeView> listAssignees(UUID issueId, UUID actorId) {
+        Issue issue = loadIssue(issueId);
+        projectAuthorization.requireAccess(issue.getProjectId(), actorId);
+        return viewsOf(issueAssigneeRepository.findByIssueId(issueId));
+    }
+
+    // Any project member can assign work - Simplira has no separate "assign" permission - but
+    // the person receiving it has to be able to open the issue, or the board would show work
+    // owned by someone who gets a 404 on it.
+    public IssueAssigneeView addAssignee(UUID issueId, UUID userId, UUID actorId) {
+        Issue issue = loadIssue(issueId);
+        projectAuthorization.requireAccess(issue.getProjectId(), actorId);
+        User assignee = requireAssignable(issue.getProjectId(), userId);
+
+        // Assigning someone already on the issue is a no-op rather than a 409: two people
+        // clicking the same avatar should not produce an error for the slower one.
+        IssueAssignee assignment = issueAssigneeRepository.find(issueId, userId)
+                .orElseGet(() -> issueAssigneeRepository.save(
+                        IssueAssignee.assign(issueId, userId, actorId)));
+
+        return new IssueAssigneeView(assignee, assignment.getAssignedAt(),
+                assignment.getAssignedBy());
+    }
+
+    public void removeAssignee(UUID issueId, UUID userId, UUID actorId) {
+        Issue issue = loadIssue(issueId);
+        projectAuthorization.requireAccess(issue.getProjectId(), actorId);
+
+        issueAssigneeRepository.find(issueId, userId)
+                .orElseThrow(() -> new IssueAssigneeNotFoundException(userId));
+        issueAssigneeRepository.remove(issueId, userId);
+    }
+
+    // Triage on a backlog of fifty: one call instead of fifty. Additive and idempotent, so
+    // re-running it after a partial failure changes nothing, and TEAM_LEADER only (§1) because
+    // it rewrites other people's workload in one go.
+    public BulkAssignResult bulkAssign(UUID projectId, List<UUID> issueIds, List<UUID> userIds,
+                                       UUID actorId) {
+        projectAuthorization.requireManage(projectId, actorId);
+        userIds.forEach(userId -> requireAssignable(projectId, userId));
+
+        int created = 0;
+        int skipped = 0;
+        for (UUID issueId : issueIds) {
+            Issue issue = loadIssue(issueId);
+            // An issue from another project would silently widen the caller's reach past the
+            // project they were authorized against.
+            if (!issue.getProjectId().equals(projectId)) {
+                throw new IssueNotFoundException(issueId);
+            }
+            for (UUID userId : userIds) {
+                if (issueAssigneeRepository.find(issueId, userId).isPresent()) {
+                    skipped++;
+                } else {
+                    issueAssigneeRepository.save(IssueAssignee.assign(issueId, userId, actorId));
+                    created++;
+                }
+            }
+        }
+        return new BulkAssignResult(issueIds.size(), created, skipped);
+    }
+
+    // The avatar row on every card of a board, in one query rather than one per card.
+    public Map<UUID, List<UUID>> assigneeIdsByIssue(Collection<UUID> issueIds) {
+        Map<UUID, List<UUID>> byIssue = new LinkedHashMap<>();
+        issueAssigneeRepository.findByIssueIds(issueIds).forEach(assignment ->
+                byIssue.computeIfAbsent(assignment.getIssueId(), key -> new ArrayList<>())
+                        .add(assignment.getUserId()));
+        return byIssue;
+    }
+
+    public record BulkAssignResult(int issuesTouched, int assignmentsCreated, int alreadyAssigned) {
+    }
+
+    // Unknown user and outsider collapse into the same answer on purpose: a project member
+    // should not learn which addresses exist in the workspace by probing this endpoint.
+    private User requireAssignable(UUID projectId, UUID userId) {
+        return userRepository.findById(userId)
+                .filter(user -> projectAuthorization.hasAccess(projectId, user.getId()))
+                .orElseThrow(() -> new BusinessRuleException("ASSIGNEE_WITHOUT_PROJECT_ACCESS",
+                        "This person cannot see the project, so they cannot be assigned to its issues"));
+    }
+
+    private List<IssueAssigneeView> viewsOf(List<IssueAssignee> assignments) {
+        Map<UUID, User> usersById = userRepository
+                .findAllById(assignments.stream().map(IssueAssignee::getUserId).toList())
+                .stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        return assignments.stream()
+                .filter(assignment -> usersById.containsKey(assignment.getUserId()))
+                .map(assignment -> new IssueAssigneeView(
+                        usersById.get(assignment.getUserId()),
+                        assignment.getAssignedAt(),
+                        assignment.getAssignedBy()))
+                .toList();
     }
 
     public List<Issue> listSubtasks(UUID issueId, UUID actorId) {

@@ -5,6 +5,7 @@ import io.github.leobej.domain.model.issue.IssuePriority;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record IssueResponse(
@@ -23,6 +24,8 @@ public record IssueResponse(
         boolean blocked,
         String blockedReason,
         UUID reporterId,
+        // Ids only: a card needs avatars, and the full people come from /issues/{id}/assignees.
+        List<UUID> assigneeIds,
         UUID closedBy,
         Instant closedAt,
         LocalDate dueDate,
@@ -32,7 +35,7 @@ public record IssueResponse(
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static IssueResponse from(Issue issue, String projectKey) {
+    public static IssueResponse from(Issue issue, String projectKey, List<UUID> assigneeIds) {
         return new IssueResponse(
                 issue.getId(),
                 issue.getProjectId(),
@@ -48,6 +51,7 @@ public record IssueResponse(
                 issue.isBlocked(),
                 issue.getBlockedReason(),
                 issue.getReporterId(),
+                assigneeIds == null ? List.of() : assigneeIds,
                 issue.getClosedBy(),
                 issue.getClosedAt(),
                 issue.getDueDate(),

@@ -1,0 +1,20 @@
+meta {
+  name: List assignees
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/assignees
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Full people - name, email, avatar, who assigned them and when. The issue itself only carries
+  assigneeIds, so a board renders avatars from one list call instead of one per card.
+}

@@ -68,6 +68,11 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Issues 6 | Reposition issue | 200 — drop between two cards, no renumbering |
 | Issues 7 | Block issue | 200 — DELETE the same path to clear |
 | Issues 8 | Create subtask | 201 — one level deep only |
+| Issues 9 | Add assignee | 201 — needs `memberUserId`; re-running it is a no-op |
+| Issues 10 | List assignees | 200 — full people; the issue itself carries only `assigneeIds` |
+| Issues 11 | Remove assignee | 204 first time, 404 after |
+| Issues 12 | List unassigned | 200 — same endpoint as the backlog, one more filter |
+| Issues 13 | Bulk assign | 200 — TEAM_LEADER or above; additive, so it is safe to repeat |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection
@@ -87,3 +92,6 @@ works as a smoke test rather than something you have to eyeball.
 - `/actuator/health` currently returns 401 — every route except register and login requires
   authentication, actuator included. Worth changing before anything tries to health-check the app.
 - There is no refresh or logout endpoint yet, so the collection stops at the access token.
+- The assignee requests need a second person: run `Projects/Add project member` first and set
+  `memberUserId` in the **Local** environment. Assigning somebody who cannot open the project is
+  409 `ASSIGNEE_WITHOUT_PROJECT_ACCESS`, and so is an id that belongs to nobody — on purpose.

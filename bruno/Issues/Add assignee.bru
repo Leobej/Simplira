@@ -1,0 +1,37 @@
+meta {
+  name: Add assignee
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/assignees
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "userId": "{{memberUserId}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Anyone who can see the project - there is no separate "assign" permission. Needs issueId from
+  Create issue and memberUserId from Projects/Add project member.
+
+  The person has to be able to open the project, or the board would carry work owned by somebody
+  who gets a 404 on the issue. A workspace member who is not on a private project, and a user id
+  that belongs to nobody, both answer 409 ASSIGNEE_WITHOUT_PROJECT_ACCESS - the same answer on
+  purpose, so this cannot be used to find out which accounts exist.
+
+  Running it twice is fine: the second call returns the existing assignment rather than 409.
+}
