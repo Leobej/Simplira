@@ -431,7 +431,8 @@ UNIQUE (project_id, number)
 ```
 
 > Subtask constraint: parent_id can only reference issues where parent_id IS NULL.
-> is_blocked is auto-set when a BLOCKS link is created and auto-cleared when removed.
+> is_blocked is auto-set when a BLOCKS link is created and auto-cleared when removed — unless a
+> manual block (one with a reason) is also holding it up; see IssueLink.
 > Position ordering uses float midpoint insertion to avoid full reorder.
 
 ### IssueAssignee
@@ -487,6 +488,28 @@ CHECK (source_issue_id <> target_issue_id)
 > BLOCKS link side effects (handled in service layer):
 > - Creating A BLOCKS B → sets B.is_blocked = true
 > - Deleting A BLOCKS B → if no other BLOCKS remain on B, sets B.is_blocked = false
+
+> **As built (V20):**
+> - **One link of each type per pair, whichever way round.** The unique index is on
+>   `(LEAST(source, target), GREATEST(source, target), link_type)` rather than the plain triple
+>   above: B RELATED_TO A is the same link as A RELATED_TO B, and B BLOCKS A next to A BLOCKS B is
+>   a deadlock. Both are `ISSUE_LINK_ALREADY_EXISTS` (409); a self-link is `ISSUE_LINK_TO_SELF`.
+>   Different types between the same pair are still allowed, as the note above says.
+> - **Links stay inside a project.** A target in another project is `ISSUE_NOT_FOUND`, even one
+>   the caller can see. Across projects, someone could find their issue blocked by one they
+>   cannot open, with no way to read why or to remove it.
+> - **is_blocked has two sources** — a manual block (`POST /issues/{id}/block`, which always
+>   carries a reason) and incoming BLOCKS links — and is up while either is. Each side clears only
+>   its own half: deleting the last link leaves a manual block standing, and `DELETE /block` clears
+>   the reason but leaves the flag up while a BLOCKS link remains. `BlockedFlagSync` is the one
+>   place that writes the link half, and it saves only when the flag actually moves, so a second
+>   blocker does not bump the issue's version and 409 someone mid-edit.
+> - **A deleted issue blocks nothing.** Deleting an issue (and its subtasks) hard-deletes every
+>   link it is either end of, and re-checks whatever it was blocking.
+> - Links are not soft-deleted: they carry no history worth keeping once removed.
+> - Known gap: closing a blocker does **not** unblock its target. The link has to be removed,
+>   as specified above. Unblocking on DONE would hook every status change, sprint close and
+>   status migration, and is left for when someone asks for it.
 
 ### Comment
 
@@ -988,10 +1011,15 @@ DELETE /api/v1/issues/{issueId}/assignees/{userId}                  👤 Remove 
 ### Issue Link Endpoints
 
 ```
-GET    /api/v1/issues/{issueId}/links                               👤 List links
-POST   /api/v1/issues/{issueId}/links                               👤 Create link
-DELETE /api/v1/issues/{issueId}/links/{linkId}                      👤 Delete link
+GET    /api/v1/issues/{issueId}/links                               👤 List links (both directions)
+POST   /api/v1/issues/{issueId}/links                               👤 Create link (this issue is the source)
+DELETE /api/v1/issues/{issueId}/links/{linkId}                      👤 Delete link (through either end)
 ```
+
+> `POST` takes `{ "targetIssueId": "...", "type": "BLOCKS" }`, so on A it reads "A blocks B".
+> Each listed link carries `sourceIssueId` / `targetIssueId` for direction and a `linkedIssue`
+> block (id, identifier, title, closed) for the issue at the other end, so a client renders
+> "blocks SB-4" or "blocked by SB-4" without another request.
 
 ### Label Endpoints
 
@@ -1473,7 +1501,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V16__create_comments.sql                   -- soft delete
 ├── V17__create_comment_mentions.sql           -- unique per (comment, user); indexed by user
 ├── V18__create_labels.sql                     -- name partial-unique per project, soft delete
-└── V19__create_issue_labels.sql               -- composite PK; indexed by label too
+├── V19__create_issue_labels.sql               -- composite PK; indexed by label too
+└── V20__create_issue_links.sql                -- one link per type per pair, either direction
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1481,7 +1510,6 @@ applied, so a slot held open for a table built later fails on every database tha
 higher number first. Email verification was originally penciled in as V3 and is a live example.
 
     create_email_verification_tokens.sql
-    create_issue_links.sql
     create_attachments.sql
     create_notifications.sql
     create_notification_preferences.sql
