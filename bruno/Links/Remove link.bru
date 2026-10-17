@@ -1,0 +1,22 @@
+meta {
+  name: Remove link
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/links/{{linkId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Through either end of the link; through any other issue it is 404 ISSUE_LINK_NOT_FOUND.
+
+  If this was the last BLOCKS link on the issue, its blocked flag comes down - unless it was
+  also blocked by hand (Issues/Block issue), which stays until that is cleared too.
+}

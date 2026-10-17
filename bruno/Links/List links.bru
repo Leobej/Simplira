@@ -1,0 +1,20 @@
+meta {
+  name: List links
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/links
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Links from both ends. Here the issue is the target, so each BLOCKS line reads "blocked by"
+  linkedIssue - compare sourceIssueId with the issue you asked about to tell the direction.
+}

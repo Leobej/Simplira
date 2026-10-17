@@ -84,6 +84,10 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Labels 6 | Filter issues by label | 200 — repeat `labelId` to require all of them |
 | Labels 7 | Detach from issue | 204 — idempotent |
 | Labels 8 | Delete label | 204 — off every issue; frees the name, so the folder re-runs |
+| Links 1 | Create blocker issue | 201 — captures `blockerIssueId`, fresh each run |
+| Links 2 | Add blocking link | 201 — blocker BLOCKS issue; captures `linkId`, issue becomes blocked |
+| Links 3 | List links | 200 — both directions, with the other issue's identifier and title |
+| Links 4 | Remove link | 204 — the last BLOCKS link going clears the flag |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

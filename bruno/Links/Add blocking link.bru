@@ -1,0 +1,41 @@
+meta {
+  name: Add blocking link
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{blockerIssueId}}/links
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "targetIssueId": "{{issueId}}",
+    "type": "BLOCKS"
+  }
+}
+
+vars:post-response {
+  linkId: res.body.data.id
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Reads "blocker BLOCKS issue": the issue in the path is the source. Get issueId afterwards and
+  it shows blocked: true.
+
+  Types: RELATED_TO, DUPLICATE_OF, BLOCKS, DEPENDS_ON. Only BLOCKS touches the blocked flag.
+
+  One link of each type per pair, whichever way round - running this again, or the reverse
+  (issue BLOCKS blocker), is 409 ISSUE_LINK_ALREADY_EXISTS. Links stay inside one project: a
+  target elsewhere is 404 ISSUE_NOT_FOUND.
+}

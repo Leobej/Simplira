@@ -29,5 +29,6 @@ docs {
   DELETE on the same path clears it. Blocked issues are findable with ?isBlocked=true on the list
   endpoints.
 
-  Once issue links exist, a BLOCKS link will set this flag automatically as well.
+  A BLOCKS link (Links folder) sets the flag too. The two do not clear each other: DELETE here
+  removes the reason, but the flag stays up while a BLOCKS link still points at the issue.
 }
