@@ -1,0 +1,30 @@
+meta {
+  name: Workspace audit log
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/audit-log?pageSize=50
+  body: none
+  auth: inherit
+}
+
+params:query {
+  pageSize: 50
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Workspace ADMIN only - everything, private projects included. Add actorId=... to see one
+  person's actions; the teammate's id is memberUserId.
+
+  Members joining (through an invitation), changing role, being removed or leaving are here as
+  MEMBER entries. Someone losing access also shows on each issue they were taken off, as
+  UNASSIGNED with reason LOST_ACCESS.
+
+  The log is append-only: the database refuses to change or delete an entry.
+}

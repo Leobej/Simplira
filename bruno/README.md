@@ -98,6 +98,9 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Notifications 6 | Dismiss notification | 204 — deleted for good |
 | Notifications 7 | Get preferences | 200 — all 10 actions, defaults filled in |
 | Notifications 8 | Update preferences | 200 — only what you list changes |
+| Audit Log 1 | Issue history | 200 — newest first; only the fields that changed |
+| Audit Log 2 | Project audit log | 200 — TEAM_LEADER or ADMIN |
+| Audit Log 3 | Workspace audit log | 200 — ADMIN only; `actorId` narrows to one person |
 
 You are `userEmail` / `userPassword` from the **Local** environment (`john@example.com` /
 `supersecret`), and every request runs as you unless it says otherwise. Change it there and the

@@ -1,0 +1,20 @@
+meta {
+  name: Project audit log
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/audit-log
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  TEAM_LEADER on the project, or workspace ADMIN. The project itself, its members, its sprints
+  (including what was carried over at close) and every issue in it.
+}

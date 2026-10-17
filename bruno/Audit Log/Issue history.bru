@@ -1,0 +1,24 @@
+meta {
+  name: Issue history
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/audit-log
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.meta.total: gt 0
+}
+
+docs {
+  Everything that happened to the issue, newest first: created, edits (only the fields that
+  changed), status moves with the status name, assignments, labels, links, blocks, sprint moves,
+  and the comments on it. Anyone who can open the issue can read it.
+
+  oldValue and newValue hold only what changed - an edit that changed nothing is not recorded.
+}
