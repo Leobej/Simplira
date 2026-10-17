@@ -1,0 +1,35 @@
+meta {
+  name: List notifications
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/notifications?page=0&pageSize=20
+  body: none
+  auth: inherit
+}
+
+params:query {
+  page: 0
+  pageSize: 20
+}
+
+script:post-response {
+  if (res.body.data && res.body.data.length > 0) {
+    bru.setVar("notificationId", res.body.data[0].id);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Newest first. Add workspaceId=... to narrow to one workspace, unread=true for unread only.
+  Captures the newest notificationId when there is one.
+
+  Nobody is notified about their own actions, so with the collection's single account this list
+  stays empty until someone else assigns, mentions or links to you. Log in as the teammate (the
+  member whose id is memberUserId) to see what the other folders sent them.
+}

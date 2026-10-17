@@ -1,0 +1,21 @@
+meta {
+  name: Get preferences
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/notification-preferences
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.length: eq 10
+}
+
+docs {
+  Every action with inApp and email, defaults (both on) filled in. Per workspace: muting status
+  changes here leaves them on in your other workspaces.
+}

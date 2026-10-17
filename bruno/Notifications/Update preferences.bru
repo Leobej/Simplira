@@ -1,0 +1,36 @@
+meta {
+  name: Update preferences
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/notification-preferences
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "preferences": [
+      { "action": "STATUS_CHANGED", "email": false },
+      { "action": "COMMENT_ADDED", "inApp": true, "email": false }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Only the actions you list change, and within one a channel you leave out keeps its value - so
+  this turns off email for status changes and comments and touches nothing else.
+
+  Actions: ASSIGNED, UNASSIGNED, MENTIONED, ISSUE_BLOCKED, COMMENT_ADDED, STATUS_CHANGED,
+  SPRINT_STARTED, SPRINT_CLOSED, ISSUE_CLOSED, LINKED.
+}

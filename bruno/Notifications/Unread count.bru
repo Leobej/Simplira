@@ -1,0 +1,24 @@
+meta {
+  name: Unread count
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/notifications?unread=true&pageSize=1
+  body: none
+  auth: inherit
+}
+
+params:query {
+  unread: true
+  pageSize: 1
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  The bell's number is meta.total - one row fetched, the count comes back anyway.
+}

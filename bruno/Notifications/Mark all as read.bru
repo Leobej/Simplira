@@ -1,0 +1,19 @@
+meta {
+  name: Mark all as read
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/notifications/read-all
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Everything, or one workspace's with ?workspaceId=...
+}

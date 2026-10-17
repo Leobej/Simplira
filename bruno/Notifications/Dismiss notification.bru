@@ -1,0 +1,19 @@
+meta {
+  name: Dismiss notification
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/notifications/{{notificationId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Removes it for good. Needs notificationId from List notifications; a second run is 404.
+}

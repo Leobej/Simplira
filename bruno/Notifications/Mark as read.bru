@@ -1,0 +1,22 @@
+meta {
+  name: Mark as read
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/notifications/{{notificationId}}/read
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.read: eq true
+}
+
+docs {
+  Needs notificationId from List notifications, so it fails while the list is empty. Idempotent:
+  reading it again keeps the first readAt. Someone else's notification is 404
+  NOTIFICATION_NOT_FOUND.
+}

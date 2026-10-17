@@ -88,6 +88,13 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Links 2 | Add blocking link | 201 — blocker BLOCKS issue; captures `linkId`, issue becomes blocked |
 | Links 3 | List links | 200 — both directions, with the other issue's identifier and title |
 | Links 4 | Remove link | 204 — the last BLOCKS link going clears the flag |
+| Notifications 1 | List notifications | 200 — newest first; captures `notificationId` when there is one |
+| Notifications 2 | Unread count | 200 — `meta.total` is the bell's number |
+| Notifications 3 | Mark as read | 200 — needs a notification; see below |
+| Notifications 4 | Mark all as read | 204 |
+| Notifications 5 | Dismiss notification | 204 — deleted for good |
+| Notifications 6 | Get preferences | 200 — all 10 actions, defaults filled in |
+| Notifications 7 | Update preferences | 200 — only what you list changes |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection
@@ -102,6 +109,9 @@ works as a smoke test rather than something you have to eyeball.
 
 ## Notes
 
+- Nobody is notified about their own actions, so the single account's inbox stays empty and
+  Notifications 3 and 5 fail until someone else acts. Assigning `memberUserId` (Assignees 1)
+  notifies that teammate; log in as them to watch their bell fill up.
 - Tokens last 15 minutes. When `Get me` starts returning 401, re-run Login.
 - Emails are normalized, so `DEV@SIMPLIRA.COM` and `dev@simplira.com` are the same account.
 - `/actuator/health` currently returns 401 — every route except register and login requires
