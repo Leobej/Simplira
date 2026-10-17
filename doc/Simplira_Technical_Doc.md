@@ -640,6 +640,42 @@ Notification
 - expires_at        TIMESTAMPTZ, NOT NULL            -- 90 days from created_at
 ```
 
+> **As built (V21):**
+> - **Who hears what.** The people *involved* in an issue are its reporter and its assignees.
+>   Nobody is told about their own action, and nobody is told about work they cannot open — the
+>   §6 check runs on each recipient, so a reporter who has left still reports but hears nothing.
+>
+>   | Action | Sent when | To |
+>   |---|---|---|
+>   | ASSIGNED / UNASSIGNED | someone is newly put on, or taken off, an issue (bulk assign too) | that person |
+>   | MENTIONED | a comment mentions you, or an edit newly does | the mentioned |
+>   | COMMENT_ADDED | a comment is added | the involved, minus anyone it mentions |
+>   | STATUS_CHANGED | the status changes, other than into DONE | the involved |
+>   | ISSUE_CLOSED | the status moves into the DONE category | the involved |
+>   | ISSUE_BLOCKED | an issue goes from unblocked to blocked, by hand or by a BLOCKS link | the involved |
+>   | LINKED | a link is made to an issue, unless it is a BLOCKS link that just blocked it | the involved in the target |
+>   | SPRINT_STARTED / SPRINT_CLOSED | a sprint starts or closes | assignees of issues in it (at closing time, before carry-over) |
+>
+>   One event reaches each person once, in its most specific form: a mention instead of "new
+>   comment", ISSUE_CLOSED instead of STATUS_CHANGED, ISSUE_BLOCKED instead of LINKED. Repeats of
+>   idempotent actions (assigning someone already assigned) send nothing.
+> - Sprint events go to people with work in the sprint, not to every project member: on a PUBLIC
+>   project that would be the whole workspace.
+> - Comment notifications carry `entity_type = ISSUE` and the issue id — the issue is where a
+>   client shows a comment. COMMENT and PROJECT stay in the CHECK for the original design but
+>   nothing sends them yet.
+> - Bodies are plain text: mention tokens are rendered as `@Name`, and comment bodies are cut to
+>   200 characters.
+> - Leaving a workspace (or its deletion) takes its notifications out of the list without
+>   deleting them; the purge takes them at expiry like any other.
+> - The purge runs nightly at 02:00 from `infrastructure/scheduling/ScheduledJobs`; retention is
+>   `simplira.notifications.expiry-days` (90).
+> - **Not built yet:** real-time push (§8) — a client polls `GET /notifications?unread=true` until
+>   the WebSocket slice lands, which hooks in at `Notifier.deliver`, the one place a notification is
+>   created. The email channel goes through `EmailService.sendNotification`, which is still the
+>   logging stub, synchronously; a real provider should move it onto a queue (§8, "RabbitMQ
+>   Additional Uses").
+
 ### NotificationPreference
 
 ```sql
@@ -654,6 +690,10 @@ NotificationPreference
 
 UNIQUE (user_id, workspace_id, action)
 ```
+
+> **As built (V22):** only overrides are stored. No row for an action means both channels are
+> on, so a new member needs nothing written and a new action needs no backfill. Saving is an
+> upsert on the unique key.
 
 ### AuditLog
 
@@ -1063,12 +1103,21 @@ POST   /api/v1/notifications/read-all                               🔓 Mark al
 DELETE /api/v1/notifications/{notificationId}                       🔓 Dismiss notification
 ```
 
+> The list is newest first and paged (`page`, `pageSize`, `meta.total`), with optional
+> `workspaceId` and `unread=true`. The bell's count is `?unread=true&pageSize=1` → `meta.total`.
+> `read-all` takes the same optional `workspaceId`. Someone else's notification is
+> `NOTIFICATION_NOT_FOUND`, not 403.
+
 ### Notification Preference Endpoints
 
 ```
 GET    /api/v1/workspaces/{workspaceId}/notification-preferences    👤 Get preferences
 PATCH  /api/v1/workspaces/{workspaceId}/notification-preferences    👤 Update preferences
 ```
+
+> GET returns every action with defaults filled in. PATCH takes only what changes —
+> `{ "preferences": [ { "action": "STATUS_CHANGED", "inApp": false } ] }` — and a channel left
+> out keeps its value. Both answer with the full list.
 
 ### Audit Log Endpoints
 
@@ -1502,7 +1551,9 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V17__create_comment_mentions.sql           -- unique per (comment, user); indexed by user
 ├── V18__create_labels.sql                     -- name partial-unique per project, soft delete
 ├── V19__create_issue_labels.sql               -- composite PK; indexed by label too
-└── V20__create_issue_links.sql                -- one link per type per pair, either direction
+├── V20__create_issue_links.sql                -- one link per type per pair, either direction
+├── V21__create_notifications.sql              -- indexed for the bell, unread count and purge
+└── V22__create_notification_preferences.sql   -- overrides only; no row means both channels on
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1511,8 +1562,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
 
     create_email_verification_tokens.sql
     create_attachments.sql
-    create_notifications.sql
-    create_notification_preferences.sql
     create_audit_log.sql
     add_indexes.sql
 ```
@@ -3715,6 +3764,11 @@ e.g. attachments/issue-uuid/abc123_screenshot.png
 ---
 
 ## 28. Scheduled Cleanup Jobs
+
+> **As built:** `@EnableScheduling` sits on `infrastructure/config/SchedulingConfig` rather than
+> the application class, and `infrastructure/scheduling/ScheduledJobs` calls
+> `NotificationService.purgeExpired()` instead of a repository directly. Only the notification
+> purge exists so far; the refresh-token purge and invitation expiry below are still to add.
 
 ### Setup
 
