@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.project.Project;
 import io.github.leobej.domain.model.project.ProjectMember;
 import io.github.leobej.domain.model.project.ProjectMemberView;
@@ -23,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -43,6 +45,7 @@ public class ProjectService {
     private final ProjectAuthorization projectAuthorization;
     private final ProjectSetupService projectSetupService;
     private final AssignmentRevoker assignmentRevoker;
+    private final AuditTrail auditTrail;
 
     public ProjectService(ProjectRepository projectRepository,
                           ProjectMemberRepository projectMemberRepository,
@@ -51,7 +54,8 @@ public class ProjectService {
                           WorkspaceAuthorization workspaceAuthorization,
                           ProjectAuthorization projectAuthorization,
                           ProjectSetupService projectSetupService,
-                          AssignmentRevoker assignmentRevoker) {
+                          AssignmentRevoker assignmentRevoker,
+                          AuditTrail auditTrail) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
@@ -60,6 +64,7 @@ public class ProjectService {
         this.projectAuthorization = projectAuthorization;
         this.projectSetupService = projectSetupService;
         this.assignmentRevoker = assignmentRevoker;
+        this.auditTrail = auditTrail;
     }
 
     public Project create(UUID workspaceId,
@@ -84,6 +89,7 @@ public class ProjectService {
 
         // Without types and statuses the project could not hold an issue (§31, §33).
         projectSetupService.seedDefaults(project.getId());
+        auditTrail.onProject(project, AuditAction.CREATED, null, snapshot(project), actorId);
         return project;
     }
 
@@ -115,6 +121,7 @@ public class ProjectService {
                           UUID actorId) {
         Project project = projectAuthorization.requireProject(projectId);
         workspaceAuthorization.requireAdmin(project.getWorkspaceId(), actorId);
+        Map<String, Object> before = snapshot(project);
 
         if (name != null && !name.isBlank()) {
             project.rename(name);
@@ -135,9 +142,10 @@ public class ProjectService {
         }
         boolean goingPrivate = visibility == ProjectVisibility.PRIVATE;
         Project saved = projectRepository.save(project);
+        auditTrail.onProject(saved, AuditAction.UPDATED, before, snapshot(saved), actorId);
         if (goingPrivate) {
             // Workspace members who were only here because it was PUBLIC lose sight of it.
-            assignmentRevoker.revokeLostAccessInProject(projectId);
+            assignmentRevoker.revokeLostAccessInProject(projectId, actorId);
         }
         return saved;
     }
@@ -147,6 +155,16 @@ public class ProjectService {
         workspaceAuthorization.requireAdmin(project.getWorkspaceId(), actorId);
         project.delete(actorId);          // soft: issues, sprints and history survive
         projectRepository.save(project);
+        auditTrail.onProject(project, AuditAction.DELETED, AuditTrail.values("name", project.getName(),
+                "key", project.getKey()), null, actorId);
+    }
+
+    private static Map<String, Object> snapshot(Project project) {
+        return AuditTrail.values(
+                "name", project.getName(),
+                "key", project.getKey(),
+                "description", project.getDescription(),
+                "visibility", project.getVisibility());
     }
 
     public List<ProjectMemberView> listMembers(UUID projectId, UUID actorId) {
@@ -189,33 +207,46 @@ public class ProjectService {
         userWorkspaceRepository.find(access.project().getWorkspaceId(), userId)
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(userId));
 
-        ProjectMember member = projectMemberRepository.find(projectId, userId)
-                .orElseGet(() -> ProjectMember.add(projectId, userId, role));
+        Optional<ProjectMember> existing = projectMemberRepository.find(projectId, userId);
+        ProjectRole previousRole = existing.map(ProjectMember::getRole).orElse(null);
+        ProjectMember member = existing.orElseGet(() -> ProjectMember.add(projectId, userId, role));
         member.changeRole(role);          // adding someone already present just sets their role
         ProjectMember saved = projectMemberRepository.save(member);
 
+        if (previousRole == null) {
+            auditTrail.onProjectMember(access.project(), userId, AuditAction.CREATED, null,
+                    AuditTrail.values("role", role), actorId);
+        } else {
+            auditTrail.onProjectMember(access.project(), userId, AuditAction.UPDATED,
+                    AuditTrail.values("role", previousRole), AuditTrail.values("role", role), actorId);
+        }
         return new ProjectMemberView(loadUser(userId), saved.getRole(), saved.getAddedAt());
     }
 
     public ProjectMemberView changeMemberRole(UUID projectId, UUID userId, ProjectRole role, UUID actorId) {
-        projectAuthorization.requireManage(projectId, actorId);
+        ProjectAccess access = projectAuthorization.requireManage(projectId, actorId);
 
         ProjectMember member = projectMemberRepository.find(projectId, userId)
                 .orElseThrow(() -> new ProjectMemberNotFoundException(userId));
+        ProjectRole previousRole = member.getRole();
         member.changeRole(role);
         ProjectMember saved = projectMemberRepository.save(member);
+        auditTrail.onProjectMember(access.project(), userId, AuditAction.UPDATED,
+                AuditTrail.values("role", previousRole), AuditTrail.values("role", role), actorId);
 
         return new ProjectMemberView(loadUser(userId), saved.getRole(), saved.getAddedAt());
     }
 
     public void removeMember(UUID projectId, UUID userId, UUID actorId) {
-        projectAuthorization.requireManage(projectId, actorId);
-        projectMemberRepository.find(projectId, userId)
+        ProjectAccess access = projectAuthorization.requireManage(projectId, actorId);
+        ProjectMember member = projectMemberRepository.find(projectId, userId)
                 .orElseThrow(() -> new ProjectMemberNotFoundException(userId));
         projectMemberRepository.remove(projectId, userId);
+        auditTrail.onProjectMember(access.project(), userId, AuditAction.DELETED,
+                AuditTrail.values("role", member.getRole()), null, actorId);
         // Only matters on a PRIVATE project; on a PUBLIC one they can still see it, so the
         // re-check keeps their assignments.
-        assignmentRevoker.revokeLostAccessInProject(projectId);
+        assignmentRevoker.revokeLostAccessInProject(projectId, actorId);
     }
 
     private User loadUser(UUID userId) {

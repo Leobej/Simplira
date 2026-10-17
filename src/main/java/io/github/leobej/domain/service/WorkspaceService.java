@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.model.workspace.UserWorkspace;
 import io.github.leobej.domain.model.workspace.Workspace;
@@ -34,17 +35,20 @@ public class WorkspaceService {
     private final UserRepository userRepository;
     private final WorkspaceAuthorization authorization;
     private final AssignmentRevoker assignmentRevoker;
+    private final AuditTrail auditTrail;
 
     public WorkspaceService(WorkspaceRepository workspaceRepository,
                             UserWorkspaceRepository userWorkspaceRepository,
                             UserRepository userRepository,
                             WorkspaceAuthorization authorization,
-                            AssignmentRevoker assignmentRevoker) {
+                            AssignmentRevoker assignmentRevoker,
+                            AuditTrail auditTrail) {
         this.workspaceRepository = workspaceRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
         this.userRepository = userRepository;
         this.authorization = authorization;
         this.assignmentRevoker = assignmentRevoker;
+        this.auditTrail = auditTrail;
     }
 
     public Workspace create(String name, String requestedSlug, UUID actorId) {
@@ -52,6 +56,7 @@ public class WorkspaceService {
                 Workspace.create(name, resolveSlug(name, requestedSlug), actorId));
         // The creator owns the workspace and is its first ADMIN.
         userWorkspaceRepository.save(UserWorkspace.founder(actorId, workspace.getId()));
+        auditTrail.onWorkspace(workspace.getId(), AuditAction.CREATED, null, snapshot(workspace), actorId);
         return workspace;
     }
 
@@ -67,6 +72,7 @@ public class WorkspaceService {
     public Workspace update(UUID workspaceId, String name, String slug, UUID actorId) {
         requireAdmin(workspaceId, actorId);
         Workspace workspace = loadWorkspace(workspaceId);
+        Map<String, Object> before = snapshot(workspace);
 
         if (name != null && !name.isBlank()) {
             workspace.rename(name);
@@ -78,7 +84,9 @@ public class WorkspaceService {
             }
             workspace.changeSlug(normalized);
         }
-        return workspaceRepository.save(workspace);
+        Workspace saved = workspaceRepository.save(workspace);
+        auditTrail.onWorkspace(workspaceId, AuditAction.UPDATED, before, snapshot(saved), actorId);
+        return saved;
     }
 
     public void delete(UUID workspaceId, UUID actorId) {
@@ -86,6 +94,11 @@ public class WorkspaceService {
         Workspace workspace = loadWorkspace(workspaceId);
         workspace.delete(actorId);               // soft: the partial index frees the slug for reuse
         workspaceRepository.save(workspace);
+        auditTrail.onWorkspace(workspaceId, AuditAction.DELETED, snapshot(workspace), null, actorId);
+    }
+
+    private static Map<String, Object> snapshot(Workspace workspace) {
+        return AuditTrail.values("name", workspace.getName(), "slug", workspace.getSlug());
     }
 
     public List<WorkspaceMember> listMembers(UUID workspaceId, UUID actorId) {
@@ -132,11 +145,14 @@ public class WorkspaceService {
 
         UserWorkspace membership = userWorkspaceRepository.find(workspaceId, targetUserId)
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(targetUserId));
+        WorkspaceRole previousRole = membership.getRole();
         membership.changeRole(newRole);
         UserWorkspace saved = userWorkspaceRepository.save(membership);
+        auditTrail.onWorkspaceMember(workspaceId, targetUserId, AuditAction.UPDATED,
+                AuditTrail.values("role", previousRole), AuditTrail.values("role", newRole), actorId);
         if (newRole != WorkspaceRole.ADMIN) {
             // An admin sees every private project; a demoted one may not any more.
-            assignmentRevoker.revokeLostAccess(workspaceId, targetUserId);
+            assignmentRevoker.revokeLostAccess(workspaceId, targetUserId, actorId);
         }
 
         User user = userRepository.findById(targetUserId)
@@ -151,15 +167,18 @@ public class WorkspaceService {
         if (workspace.isOwnedBy(targetUserId)) {
             throw new ForbiddenException("The workspace owner cannot be removed");
         }
-        userWorkspaceRepository.find(workspaceId, targetUserId)
+        UserWorkspace membership = userWorkspaceRepository.find(workspaceId, targetUserId)
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(targetUserId));
 
         userWorkspaceRepository.remove(workspaceId, targetUserId);
-        assignmentRevoker.revokeLostAccess(workspaceId, targetUserId);
+        auditTrail.onWorkspaceMember(workspaceId, targetUserId, AuditAction.DELETED,
+                AuditTrail.values("role", membership.getRole()), null, actorId);
+        assignmentRevoker.revokeLostAccess(workspaceId, targetUserId, actorId);
     }
 
+    // Recorded like a removal, with the member as their own actor - that is what tells the two apart.
     public void leave(UUID workspaceId, UUID actorId) {
-        requireMembership(workspaceId, actorId);
+        UserWorkspace membership = requireMembership(workspaceId, actorId);
         Workspace workspace = loadWorkspace(workspaceId);
 
         if (workspace.isOwnedBy(actorId)) {
@@ -167,7 +186,9 @@ public class WorkspaceService {
                     "The workspace owner cannot leave; transfer ownership or delete the workspace");
         }
         userWorkspaceRepository.remove(workspaceId, actorId);
-        assignmentRevoker.revokeLostAccess(workspaceId, actorId);
+        auditTrail.onWorkspaceMember(workspaceId, actorId, AuditAction.DELETED,
+                AuditTrail.values("role", membership.getRole()), null, actorId);
+        assignmentRevoker.revokeLostAccess(workspaceId, actorId, actorId);
     }
 
     private static boolean matches(User user, String needle) {
@@ -179,8 +200,8 @@ public class WorkspaceService {
         return authorization.requireWorkspace(workspaceId);
     }
 
-    private void requireMembership(UUID workspaceId, UUID actorId) {
-        authorization.requireMembership(workspaceId, actorId);
+    private UserWorkspace requireMembership(UUID workspaceId, UUID actorId) {
+        return authorization.requireMembership(workspaceId, actorId);
     }
 
     private void requireAdmin(UUID workspaceId, UUID actorId) {

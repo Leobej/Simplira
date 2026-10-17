@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.issue.Issue;
 import io.github.leobej.domain.model.issue.IssueStatus;
 import io.github.leobej.domain.model.issue.IssueStatusCategory;
@@ -15,6 +16,7 @@ import io.github.leobej.shared.exception.SprintNotFoundException;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 // Pure domain: no Spring annotations, no infrastructure imports.
@@ -28,22 +30,27 @@ public class SprintService {
     private final IssueStatusRepository issueStatusRepository;
     private final ProjectAuthorization projectAuthorization;
     private final Notifier notifier;
+    private final AuditTrail auditTrail;
 
     public SprintService(SprintRepository sprintRepository,
                          IssueRepository issueRepository,
                          IssueStatusRepository issueStatusRepository,
                          ProjectAuthorization projectAuthorization,
-                         Notifier notifier) {
+                         Notifier notifier,
+                         AuditTrail auditTrail) {
         this.sprintRepository = sprintRepository;
         this.issueRepository = issueRepository;
         this.issueStatusRepository = issueStatusRepository;
         this.projectAuthorization = projectAuthorization;
         this.notifier = notifier;
+        this.auditTrail = auditTrail;
     }
 
     public Sprint create(UUID projectId, String name, LocalDate startDate, LocalDate endDate, UUID actorId) {
         projectAuthorization.requireManage(projectId, actorId);
-        return sprintRepository.save(Sprint.create(projectId, name, startDate, endDate, actorId));
+        Sprint saved = sprintRepository.save(Sprint.create(projectId, name, startDate, endDate, actorId));
+        auditTrail.onSprint(saved, AuditAction.CREATED, null, snapshot(saved), actorId);
+        return saved;
     }
 
     public List<Sprint> listForProject(UUID projectId, UUID actorId) {
@@ -59,6 +66,7 @@ public class SprintService {
 
     public Sprint update(UUID sprintId, String name, LocalDate startDate, LocalDate endDate, UUID actorId) {
         Sprint sprint = requireManageable(sprintId, actorId);
+        Map<String, Object> before = snapshot(sprint);
 
         if (name != null && !name.isBlank()) {
             sprint.rename(name);
@@ -66,7 +74,16 @@ public class SprintService {
         if (startDate != null || endDate != null) {
             sprint.reschedule(startDate, endDate);
         }
-        return sprintRepository.save(sprint);
+        Sprint saved = sprintRepository.save(sprint);
+        auditTrail.onSprint(saved, AuditAction.UPDATED, before, snapshot(saved), actorId);
+        return saved;
+    }
+
+    private static Map<String, Object> snapshot(Sprint sprint) {
+        return AuditTrail.values(
+                "name", sprint.getName(),
+                "startDate", sprint.getStartDate(),
+                "endDate", sprint.getEndDate());
     }
 
     public void delete(UUID sprintId, UUID actorId) {
@@ -79,6 +96,8 @@ public class SprintService {
                     "An ACTIVE sprint cannot be deleted; close it first");
         }
         sprintRepository.delete(sprintId);
+        // The row is gone, so this entry is the only record it existed.
+        auditTrail.onSprint(sprint, AuditAction.DELETED, snapshot(sprint), null, actorId);
     }
 
     public Sprint start(UUID sprintId, UUID actorId) {
@@ -91,7 +110,10 @@ public class SprintService {
         }
         sprint.start();
         Sprint saved = sprintRepository.save(sprint);
-        notifier.sprintStarted(saved, issueIdsIn(sprintId), actorId);
+        List<UUID> issueIds = issueIdsIn(sprintId);
+        auditTrail.onSprint(saved, AuditAction.SPRINT_STARTED, null,
+                AuditTrail.values("name", saved.getName(), "issueCount", issueIds.size()), actorId);
+        notifier.sprintStarted(saved, issueIds, actorId);
         return saved;
     }
 
@@ -116,9 +138,13 @@ public class SprintService {
         // Taken before the carry-over: whoever had work in the sprint hears it closed, including
         // the people whose unfinished issues are about to leave it.
         List<UUID> issueIds = issueIdsIn(sprintId);
-        moveIncompleteIssues(sprint, target);
+        int carriedOver = moveIncompleteIssues(sprint, target, actorId);
         sprint.close();
         Sprint saved = sprintRepository.save(sprint);
+        auditTrail.onSprint(saved, AuditAction.SPRINT_CLOSED, null, AuditTrail.values(
+                "incompleteIssueAction", action,
+                "targetSprintId", target == null ? null : target.getId(),
+                "carriedOver", carriedOver), actorId);
         notifier.sprintClosed(saved, issueIds, actorId);
         return saved;
     }
@@ -129,7 +155,8 @@ public class SprintService {
 
     // "Incomplete" is defined by the status category, never by the name, so a project that calls
     // its finished column "Shipped" still carries the right issues over (§33).
-    private void moveIncompleteIssues(Sprint sprint, Sprint target) {
+    // Each carried issue gets its own MOVED entry, so its history says why it left the sprint.
+    private int moveIncompleteIssues(Sprint sprint, Sprint target, UUID actorId) {
         List<UUID> doneStatusIds = issueStatusRepository.findByProjectId(sprint.getProjectId()).stream()
                 .filter(status -> status.getCategory() == IssueStatusCategory.DONE)
                 .map(IssueStatus::getId)
@@ -148,7 +175,10 @@ public class SprintService {
                         issueRepository.maxSprintPosition(target.getId()) + POSITION_GAP);
             }
             issueRepository.save(issue);
+            auditTrail.onIssue(issue, AuditAction.MOVED, AuditTrail.values("sprintId", sprint.getId()),
+                    AuditTrail.values("sprintId", issue.getSprintId(), "reason", "SPRINT_CLOSED"), actorId);
         }
+        return carried.size();
     }
 
     private Sprint requireManageable(UUID sprintId, UUID actorId) {

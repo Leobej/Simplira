@@ -2,6 +2,7 @@ package io.github.leobej.infrastructure.config;
 
 import io.github.leobej.domain.port.AccessTokenIssuer;
 import io.github.leobej.domain.port.PasswordHasher;
+import io.github.leobej.domain.repository.AuditLogRepository;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.port.EmailService;
 import io.github.leobej.domain.port.NotificationPublisher;
@@ -25,6 +26,8 @@ import io.github.leobej.domain.repository.UserRepository;
 import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AssignmentRevoker;
+import io.github.leobej.domain.service.AuditLogService;
+import io.github.leobej.domain.service.AuditTrail;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.BlockedFlagSync;
 import io.github.leobej.domain.service.CommentService;
@@ -71,14 +74,31 @@ public class DomainServiceConfig {
         return new WorkspaceAuthorization(workspaceRepository, userWorkspaceRepository);
     }
 
+    // Every service that changes something worth remembering records it through this.
+    @Bean
+    public AuditTrail auditTrail(AuditLogRepository auditLogRepository, ProjectRepository projectRepository) {
+        return new AuditTrail(auditLogRepository, projectRepository);
+    }
+
+    @Bean
+    public AuditLogService auditLogService(AuditLogRepository auditLogRepository,
+                                           IssueRepository issueRepository,
+                                           UserRepository userRepository,
+                                           WorkspaceAuthorization workspaceAuthorization,
+                                           ProjectAuthorization projectAuthorization) {
+        return new AuditLogService(auditLogRepository, issueRepository, userRepository, workspaceAuthorization,
+                projectAuthorization);
+    }
+
     @Bean
     public WorkspaceService workspaceService(WorkspaceRepository workspaceRepository,
                                              UserWorkspaceRepository userWorkspaceRepository,
                                              UserRepository userRepository,
                                              WorkspaceAuthorization authorization,
-                                             AssignmentRevoker assignmentRevoker) {
+                                             AssignmentRevoker assignmentRevoker,
+                                             AuditTrail auditTrail) {
         return new WorkspaceService(workspaceRepository, userWorkspaceRepository, userRepository,
-                authorization, assignmentRevoker);
+                authorization, assignmentRevoker, auditTrail);
     }
 
     @Bean
@@ -87,9 +107,10 @@ public class DomainServiceConfig {
                                                UserRepository userRepository,
                                                WorkspaceAuthorization authorization,
                                                EmailService emailService,
-                                               @Value("${simplira.invitations.expiry}") long invitationExpirySeconds) {
+                                               @Value("${simplira.invitations.expiry}") long invitationExpirySeconds,
+                                               AuditTrail auditTrail) {
         return new InvitationService(invitationRepository, userWorkspaceRepository, userRepository,
-                authorization, emailService, Duration.ofSeconds(invitationExpirySeconds));
+                authorization, emailService, Duration.ofSeconds(invitationExpirySeconds), auditTrail);
     }
 
     @Bean
@@ -107,10 +128,11 @@ public class DomainServiceConfig {
                                          WorkspaceAuthorization workspaceAuthorization,
                                          ProjectAuthorization projectAuthorization,
                                          ProjectSetupService projectSetupService,
-                                         AssignmentRevoker assignmentRevoker) {
+                                         AssignmentRevoker assignmentRevoker,
+                                         AuditTrail auditTrail) {
         return new ProjectService(projectRepository, projectMemberRepository, userWorkspaceRepository,
                 userRepository, workspaceAuthorization, projectAuthorization, projectSetupService,
-                assignmentRevoker);
+                assignmentRevoker, auditTrail);
     }
 
     // Every service that changes something people care about tells them through this.
@@ -149,9 +171,10 @@ public class DomainServiceConfig {
                                        IssueRepository issueRepository,
                                        IssueStatusRepository issueStatusRepository,
                                        ProjectAuthorization projectAuthorization,
-                                       Notifier notifier) {
+                                       Notifier notifier,
+                                       AuditTrail auditTrail) {
         return new SprintService(sprintRepository, issueRepository, issueStatusRepository,
-                projectAuthorization, notifier);
+                projectAuthorization, notifier, auditTrail);
     }
 
     @Bean
@@ -191,9 +214,10 @@ public class DomainServiceConfig {
                                      SprintRepository sprintRepository,
                                      ProjectAuthorization projectAuthorization,
                                      BlockedFlagSync blockedFlagSync,
-                                     Notifier notifier) {
+                                     Notifier notifier,
+                                     AuditTrail auditTrail) {
         return new IssueService(issueRepository, issueTypeRepository, issueStatusRepository,
-                projectRepository, sprintRepository, projectAuthorization, blockedFlagSync, notifier);
+                projectRepository, sprintRepository, projectAuthorization, blockedFlagSync, notifier, auditTrail);
     }
 
     @Bean
@@ -201,9 +225,10 @@ public class DomainServiceConfig {
                                              IssueRepository issueRepository,
                                              ProjectAuthorization projectAuthorization,
                                              BlockedFlagSync blockedFlagSync,
-                                             Notifier notifier) {
+                                             Notifier notifier,
+                                             AuditTrail auditTrail) {
         return new IssueLinkService(issueLinkRepository, issueRepository, projectAuthorization,
-                blockedFlagSync, notifier);
+                blockedFlagSync, notifier, auditTrail);
     }
 
     @Bean
@@ -211,15 +236,17 @@ public class DomainServiceConfig {
                                                      IssueRepository issueRepository,
                                                      UserRepository userRepository,
                                                      ProjectAuthorization projectAuthorization,
-                                                     Notifier notifier) {
+                                                     Notifier notifier,
+                                                     AuditTrail auditTrail) {
         return new IssueAssigneeService(issueAssigneeRepository, issueRepository, userRepository,
-                projectAuthorization, notifier);
+                projectAuthorization, notifier, auditTrail);
     }
 
     @Bean
     public AssignmentRevoker assignmentRevoker(IssueAssigneeRepository issueAssigneeRepository,
-                                               ProjectAuthorization projectAuthorization) {
-        return new AssignmentRevoker(issueAssigneeRepository, projectAuthorization);
+                                               ProjectAuthorization projectAuthorization,
+                                               AuditTrail auditTrail) {
+        return new AssignmentRevoker(issueAssigneeRepository, projectAuthorization, auditTrail);
     }
 
     @Bean
@@ -227,15 +254,17 @@ public class DomainServiceConfig {
                                          IssueRepository issueRepository,
                                          UserRepository userRepository,
                                          ProjectAuthorization projectAuthorization,
-                                         Notifier notifier) {
+                                         Notifier notifier,
+                                         AuditTrail auditTrail) {
         return new CommentService(commentRepository, issueRepository, userRepository, projectAuthorization,
-                notifier);
+                notifier, auditTrail);
     }
 
     @Bean
     public LabelService labelService(LabelRepository labelRepository,
                                      IssueRepository issueRepository,
-                                     ProjectAuthorization projectAuthorization) {
-        return new LabelService(labelRepository, issueRepository, projectAuthorization);
+                                     ProjectAuthorization projectAuthorization,
+                                     AuditTrail auditTrail) {
+        return new LabelService(labelRepository, issueRepository, projectAuthorization, auditTrail);
     }
 }

@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.comment.Comment;
 import io.github.leobej.domain.model.comment.CommentView;
 import io.github.leobej.domain.model.issue.Issue;
@@ -31,17 +32,20 @@ public class CommentService {
     private final UserRepository userRepository;
     private final ProjectAuthorization projectAuthorization;
     private final Notifier notifier;
+    private final AuditTrail auditTrail;
 
     public CommentService(CommentRepository commentRepository,
                           IssueRepository issueRepository,
                           UserRepository userRepository,
                           ProjectAuthorization projectAuthorization,
-                          Notifier notifier) {
+                          Notifier notifier,
+                          AuditTrail auditTrail) {
         this.commentRepository = commentRepository;
         this.issueRepository = issueRepository;
         this.userRepository = userRepository;
         this.projectAuthorization = projectAuthorization;
         this.notifier = notifier;
+        this.auditTrail = auditTrail;
     }
 
     public List<CommentView> list(UUID issueId, UUID actorId) {
@@ -56,6 +60,8 @@ public class CommentService {
 
         Comment comment = Comment.write(issueId, actorId, content, validMentions(issue.getProjectId(), content));
         Comment saved = commentRepository.save(comment);
+        auditTrail.onComment(issue, saved.getId(), AuditAction.CREATED, null,
+                AuditTrail.values("content", saved.getContent()), actorId);
         notifier.commentAdded(issue, saved, actorId);
         return views(List.of(saved)).get(0);
     }
@@ -70,8 +76,11 @@ public class CommentService {
             throw new ForbiddenException("Only the author can edit a comment");
         }
         Set<UUID> previouslyMentioned = Set.copyOf(comment.getMentionedUserIds());
+        String previousContent = comment.getContent();
         comment.edit(content, validMentions(issue.getProjectId(), content));
         Comment saved = commentRepository.save(comment);
+        auditTrail.onComment(issue, saved.getId(), AuditAction.UPDATED,
+                AuditTrail.values("content", previousContent), AuditTrail.values("content", saved.getContent()), actorId);
         notifier.commentEdited(issue, saved, previouslyMentioned, actorId);
         return views(List.of(saved)).get(0);
     }
@@ -88,6 +97,9 @@ public class CommentService {
         }
         comment.delete();
         commentRepository.save(comment);
+        // The author is the point when it is someone else doing the deleting: that is moderation.
+        auditTrail.onComment(issue, commentId, AuditAction.DELETED,
+                AuditTrail.values("authorId", comment.getAuthorId()), null, actorId);
     }
 
     // A mention of someone who cannot see the project is dropped rather than failing the comment:

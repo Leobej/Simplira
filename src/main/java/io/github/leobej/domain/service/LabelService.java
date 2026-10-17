@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.issue.Issue;
 import io.github.leobej.domain.model.label.Label;
 import io.github.leobej.domain.repository.IssueRepository;
@@ -21,13 +22,16 @@ public class LabelService {
     private final LabelRepository labelRepository;
     private final IssueRepository issueRepository;
     private final ProjectAuthorization projectAuthorization;
+    private final AuditTrail auditTrail;
 
     public LabelService(LabelRepository labelRepository,
                         IssueRepository issueRepository,
-                        ProjectAuthorization projectAuthorization) {
+                        ProjectAuthorization projectAuthorization,
+                        AuditTrail auditTrail) {
         this.labelRepository = labelRepository;
         this.issueRepository = issueRepository;
         this.projectAuthorization = projectAuthorization;
+        this.auditTrail = auditTrail;
     }
 
     public List<Label> list(UUID projectId, UUID actorId) {
@@ -81,15 +85,27 @@ public class LabelService {
     public List<Label> attach(UUID issueId, UUID labelId, UUID actorId) {
         Issue issue = requireVisibleIssue(issueId, actorId);
         // A label from another project is not one this issue can wear.
-        loadInProject(issue.getProjectId(), labelId);
+        Label label = loadInProject(issue.getProjectId(), labelId);
 
+        boolean alreadyOn = labelRepository.labelIdsOf(issueId).contains(labelId);
         labelRepository.attach(issueId, labelId);
+        if (!alreadyOn) {
+            // The name as it was then: labels get renamed, and history should not.
+            auditTrail.onIssue(issue, AuditAction.LABELED, null,
+                    AuditTrail.values("labelId", labelId, "name", label.getName()), actorId);
+        }
         return labelRepository.findAllById(labelRepository.labelIdsOf(issueId));
     }
 
     public void detach(UUID issueId, UUID labelId, UUID actorId) {
-        requireVisibleIssue(issueId, actorId);
+        Issue issue = requireVisibleIssue(issueId, actorId);
+        boolean wasOn = labelRepository.labelIdsOf(issueId).contains(labelId);
         labelRepository.detach(issueId, labelId);
+        if (wasOn) {
+            String name = labelRepository.findById(labelId).map(Label::getName).orElse(null);
+            auditTrail.onIssue(issue, AuditAction.UNLABELED,
+                    AuditTrail.values("labelId", labelId, "name", name), null, actorId);
+        }
     }
 
     // For rendering cards: one query for a whole page of issues.

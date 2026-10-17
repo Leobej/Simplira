@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.issue.Issue;
 import io.github.leobej.domain.model.issue.IssueFilter;
 import io.github.leobej.domain.model.issue.IssuePage;
@@ -25,6 +26,8 @@ import io.github.leobej.shared.exception.SprintNotFoundException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 // Pure domain: no Spring annotations, no infrastructure imports.
@@ -43,6 +46,7 @@ public class IssueService {
     private final ProjectAuthorization projectAuthorization;
     private final BlockedFlagSync blockedFlagSync;
     private final Notifier notifier;
+    private final AuditTrail auditTrail;
 
     public IssueService(IssueRepository issueRepository,
                         IssueTypeRepository issueTypeRepository,
@@ -51,7 +55,8 @@ public class IssueService {
                         SprintRepository sprintRepository,
                         ProjectAuthorization projectAuthorization,
                         BlockedFlagSync blockedFlagSync,
-                        Notifier notifier) {
+                        Notifier notifier,
+                        AuditTrail auditTrail) {
         this.issueRepository = issueRepository;
         this.issueTypeRepository = issueTypeRepository;
         this.issueStatusRepository = issueStatusRepository;
@@ -60,6 +65,7 @@ public class IssueService {
         this.projectAuthorization = projectAuthorization;
         this.blockedFlagSync = blockedFlagSync;
         this.notifier = notifier;
+        this.auditTrail = auditTrail;
     }
 
     public Issue create(UUID projectId,
@@ -83,7 +89,12 @@ public class IssueService {
                 issueRepository.nextNumber(projectId),
                 issueRepository.maxBacklogPosition(projectId) + POSITION_GAP);
 
-        return issueRepository.save(issue);
+        Issue saved = issueRepository.save(issue);
+        Map<String, Object> created = editableFields(saved);
+        created.put("statusId", saved.getStatusId());
+        created.put("parentId", saved.getParentId());
+        auditTrail.onIssue(saved, AuditAction.CREATED, null, created, actorId);
+        return saved;
     }
 
     public Issue get(UUID issueId, UUID actorId) {
@@ -162,6 +173,8 @@ public class IssueService {
         Issue issue = loadIssue(issueId);
         projectAuthorization.requireAccess(issue.getProjectId(), actorId);
         requireCurrentVersion(issue, expectedVersion);
+        Map<String, Object> before = editableFields(issue);
+        UUID previousStatusId = issue.getStatusId();
 
         if (title != null && !title.isBlank()) {
             issue.rename(title);
@@ -188,10 +201,34 @@ public class IssueService {
         }
         Issue saved = issueRepository.save(issue);
 
+        auditTrail.onIssue(saved, AuditAction.UPDATED, before, editableFields(saved), actorId);
         if (newStatus != null) {
-            notifier.statusChanged(saved, newStatus, !wasClosed && saved.getClosedAt() != null, actorId);
+            boolean closed = !wasClosed && saved.getClosedAt() != null;
+            // §33: name and category alongside the id, so the history still reads right after
+            // the status is renamed or deleted.
+            auditTrail.onIssue(saved, closed ? AuditAction.ISSUE_CLOSED : AuditAction.STATUS_CHANGED,
+                    issueStatusRepository.findById(previousStatusId).map(IssueService::statusSnapshot).orElse(null),
+                    statusSnapshot(newStatus), actorId);
+            notifier.statusChanged(saved, newStatus, closed, actorId);
         }
         return saved;
+    }
+
+    // What PATCH /issues/{id} can change besides the status, which gets its own entry.
+    private static Map<String, Object> editableFields(Issue issue) {
+        return AuditTrail.values(
+                "title", issue.getTitle(),
+                "description", issue.getDescription(),
+                "typeId", issue.getTypeId(),
+                "priority", issue.getPriority(),
+                "dueDate", issue.getDueDate());
+    }
+
+    private static Map<String, Object> statusSnapshot(IssueStatus status) {
+        return AuditTrail.values(
+                "statusId", status.getId(),
+                "statusName", status.getName(),
+                "category", status.getCategory());
     }
 
     public void delete(UUID issueId, UUID actorId) {
@@ -207,6 +244,10 @@ public class IssueService {
         issue.delete();
         issueRepository.save(issue);
 
+        subtasks.forEach(subtask -> auditTrail.onIssue(subtask, AuditAction.DELETED,
+                AuditTrail.values("title", subtask.getTitle(), "parentId", issueId), null, actorId));
+        auditTrail.onIssue(issue, AuditAction.DELETED, AuditTrail.values("title", issue.getTitle()), null, actorId);
+
         // Links last: re-checking what these issues blocked writes to other issues, and the
         // parent saved just above could have been one of them.
         subtasks.forEach(subtask -> blockedFlagSync.issueDeleted(subtask.getId()));
@@ -218,8 +259,12 @@ public class IssueService {
         projectAuthorization.requireAccess(issue.getProjectId(), actorId);
         // Re-blocking with a new reason edits the reason; only the move into blocked is news.
         boolean wasBlocked = issue.isBlocked();
+        String previousReason = issue.getBlockedReason();
         issue.block(reason);
         Issue saved = issueRepository.save(issue);
+        auditTrail.onIssue(saved, AuditAction.BLOCKED,
+                previousReason == null ? null : AuditTrail.values("reason", previousReason),
+                AuditTrail.values("reason", reason), actorId);
         if (!wasBlocked) {
             notifier.issueBlocked(saved, reason, actorId);
         }
@@ -229,8 +274,15 @@ public class IssueService {
     public Issue unblock(UUID issueId, UUID actorId) {
         Issue issue = loadIssue(issueId);
         projectAuthorization.requireAccess(issue.getProjectId(), actorId);
+        String previousReason = issue.getBlockedReason();
         issue.unblock(blockedFlagSync.blockedByLinks(issueId));
-        return issueRepository.save(issue);
+        Issue saved = issueRepository.save(issue);
+        // Only a manual block can be lifted here; with none, nothing happened worth recording.
+        if (previousReason != null) {
+            auditTrail.onIssue(saved, AuditAction.UNBLOCKED, AuditTrail.values("reason", previousReason), null,
+                    actorId);
+        }
+        return saved;
     }
 
     // Drag-and-drop: the client says which cards the issue was dropped between, and the server
@@ -271,15 +323,29 @@ public class IssueService {
             throw new BusinessRuleException("SPRINT_COMPLETED",
                     "Issues cannot be moved into a completed sprint");
         }
+        UUID previousSprintId = issue.getSprintId();
         issue.moveToSprint(sprintId, issueRepository.maxSprintPosition(sprintId) + POSITION_GAP);
-        return issueRepository.save(issue);
+        Issue saved = issueRepository.save(issue);
+        recordMove(saved, previousSprintId, actorId);
+        return saved;
     }
 
     public Issue moveToBacklog(UUID issueId, UUID actorId) {
         Issue issue = loadIssue(issueId);
         projectAuthorization.requireManage(issue.getProjectId(), actorId);
+        UUID previousSprintId = issue.getSprintId();
         issue.moveToBacklog(issueRepository.maxBacklogPosition(issue.getProjectId()) + POSITION_GAP);
-        return issueRepository.save(issue);
+        Issue saved = issueRepository.save(issue);
+        recordMove(saved, previousSprintId, actorId);
+        return saved;
+    }
+
+    // A null sprintId is the backlog. Re-moving to where it already is records nothing.
+    private void recordMove(Issue issue, UUID previousSprintId, UUID actorId) {
+        if (!Objects.equals(previousSprintId, issue.getSprintId())) {
+            auditTrail.onIssue(issue, AuditAction.MOVED, AuditTrail.values("sprintId", previousSprintId),
+                    AuditTrail.values("sprintId", issue.getSprintId()), actorId);
+        }
     }
 
     public List<Issue> listSubtasks(UUID issueId, UUID actorId) {

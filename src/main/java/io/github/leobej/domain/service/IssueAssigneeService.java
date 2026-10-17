@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.issue.BulkAssignResult;
 import io.github.leobej.domain.model.issue.Issue;
 import io.github.leobej.domain.model.issue.IssueAssignee;
@@ -30,17 +31,20 @@ public class IssueAssigneeService {
     private final UserRepository userRepository;
     private final ProjectAuthorization projectAuthorization;
     private final Notifier notifier;
+    private final AuditTrail auditTrail;
 
     public IssueAssigneeService(IssueAssigneeRepository assigneeRepository,
                                 IssueRepository issueRepository,
                                 UserRepository userRepository,
                                 ProjectAuthorization projectAuthorization,
-                                Notifier notifier) {
+                                Notifier notifier,
+                                AuditTrail auditTrail) {
         this.assigneeRepository = assigneeRepository;
         this.issueRepository = issueRepository;
         this.userRepository = userRepository;
         this.projectAuthorization = projectAuthorization;
         this.notifier = notifier;
+        this.auditTrail = auditTrail;
     }
 
     public List<IssueAssigneeView> list(UUID issueId, UUID actorId) {
@@ -58,6 +62,7 @@ public class IssueAssigneeService {
         boolean alreadyAssigned = assigneeRepository.isAssigned(issueId, userId);
         assigneeRepository.assign(IssueAssignee.assign(issueId, userId, actorId));
         if (!alreadyAssigned) {
+            auditTrail.onIssue(issue, AuditAction.ASSIGNED, null, AuditTrail.values("userId", userId), actorId);
             notifier.issueAssigned(issue, userId, actorId);
         }
         return views(issueId);
@@ -69,6 +74,7 @@ public class IssueAssigneeService {
         boolean wasAssigned = assigneeRepository.isAssigned(issueId, userId);
         assigneeRepository.unassign(issueId, userId);
         if (wasAssigned) {
+            auditTrail.onIssue(issue, AuditAction.UNASSIGNED, AuditTrail.values("userId", userId), null, actorId);
             notifier.issueUnassigned(issue, userId, actorId);
         }
     }
@@ -98,6 +104,7 @@ public class IssueAssigneeService {
                 alreadyAssigned++;
             } else {
                 assigneeRepository.assign(IssueAssignee.assign(issue.getId(), userId, actorId));
+                auditTrail.onIssue(issue, AuditAction.ASSIGNED, null, AuditTrail.values("userId", userId), actorId);
                 notifier.issueAssigned(issue, userId, actorId);
                 assigned++;
             }

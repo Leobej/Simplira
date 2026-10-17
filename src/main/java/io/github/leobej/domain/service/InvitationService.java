@@ -1,5 +1,6 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.invitation.Invitation;
 import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.model.workspace.UserWorkspace;
@@ -17,6 +18,7 @@ import io.github.leobej.shared.util.TokenGenerator;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 // Pure domain: no Spring annotations, no infrastructure imports.
@@ -29,19 +31,22 @@ public class InvitationService {
     private final WorkspaceAuthorization authorization;
     private final EmailService emailService;
     private final Duration invitationLifetime;
+    private final AuditTrail auditTrail;
 
     public InvitationService(InvitationRepository invitationRepository,
                              UserWorkspaceRepository userWorkspaceRepository,
                              UserRepository userRepository,
                              WorkspaceAuthorization authorization,
                              EmailService emailService,
-                             Duration invitationLifetime) {
+                             Duration invitationLifetime,
+                             AuditTrail auditTrail) {
         this.invitationRepository = invitationRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
         this.userRepository = userRepository;
         this.authorization = authorization;
         this.emailService = emailService;
         this.invitationLifetime = invitationLifetime;
+        this.auditTrail = auditTrail;
     }
 
     public Invitation invite(UUID workspaceId, String email, WorkspaceRole role, UUID actorId) {
@@ -103,12 +108,18 @@ public class InvitationService {
         invitationRepository.save(invitation);
 
         // Accepting twice from two tabs should not create two memberships.
-        UserWorkspace membership = userWorkspaceRepository.find(invitation.getWorkspaceId(), actor.getId())
+        Optional<UserWorkspace> existing = userWorkspaceRepository.find(invitation.getWorkspaceId(), actor.getId());
+        UserWorkspace membership = existing
                 .orElseGet(() -> userWorkspaceRepository.save(UserWorkspace.join(
                         actor.getId(),
                         invitation.getWorkspaceId(),
                         invitation.getRole(),
                         invitation.getInvitedBy())));
+        if (existing.isEmpty()) {
+            auditTrail.onWorkspaceMember(invitation.getWorkspaceId(), actor.getId(), AuditAction.CREATED, null,
+                    AuditTrail.values("role", membership.getRole(), "invitedBy", invitation.getInvitedBy()),
+                    actor.getId());
+        }
 
         // Clicking a link sent to an address proves control of it, which is exactly what the
         // separate verification flow would prove. Only when the addresses actually match.
