@@ -7,7 +7,11 @@ meta {
 post {
   url: {{baseUrl}}/api/v1/invitations/accept
   body: json
-  auth: inherit
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{teammateToken}}
 }
 
 headers {
@@ -27,9 +31,12 @@ assert {
 docs {
   Paste the token from the application log into the invitationToken environment variable first.
 
-  This runs as whoever is logged in - so to see it properly, register a second account, log in as
-  them, then accept. Accepting as the invited address also flips emailVerified to true, because
-  following a link sent to an address proves control of it.
+  Runs as the teammate (Auth/Register teammate and Login teammate), the account at inviteEmail -
+  the person the invitation was for. Accepting as the invited address also flips emailVerified to
+  true, because following a link sent to an address proves control of it.
+
+  Once accepted, the teammate is in the workspace: Assignees, Comments and Projects can point at
+  them through memberUserId, and Notifications/Teammate mentions you can reach your issues.
 
   A token works exactly once: the second attempt is 409 INVITATION_NOT_USABLE.
 }

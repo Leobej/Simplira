@@ -25,8 +25,8 @@ assert {
 }
 
 docs {
-  Run Issues/Create issue first, and set memberUserId to somebody in the workspace (Workspaces/
-  List members has the ids). Assigning yourself works too.
+  Run Issues/Create issue first. memberUserId is the teammate, captured by Auth/Login teammate;
+  they must have accepted the invitation. Assigning yourself works too, but notifies nobody.
 
   Answers 200 with the issue's whole assignee list, not 201: assigning is idempotent, so running
   this twice changes nothing the second time.

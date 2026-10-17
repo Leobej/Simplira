@@ -26,6 +26,8 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Auth 5 | Login - wrong password | 401 `INVALID_CREDENTIALS` |
 | Auth 6 | Refresh | 200 — rotates the cookie, captures a fresh `accessToken` |
 | Auth 7 | Logout | 204 — revokes the session; Refresh afterwards gives 401 |
+| Auth 8 | Register teammate | 201 the first time, 409 after — both pass |
+| Auth 9 | Login teammate | 200 — captures `teammateToken` and `memberUserId` |
 | Users 1 | Get me | 200 — inherits the collection's bearer auth |
 | Users 2 | Get me - no token | 401 `UNAUTHENTICATED` |
 | Workspaces 1 | Create workspace | 201 — captures `workspaceId`; slug derived from the name |
@@ -37,14 +39,14 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Workspaces 7 | Delete workspace | 204 — soft delete; frees the slug for reuse |
 | Invitations 1 | Invite member | 201 — captures `invitationId`; token goes to the log, not the response |
 | Invitations 2 | List invitations | 200 — never includes the token |
-| Invitations 3 | Accept invitation | 200 — needs `invitationToken` pasted from the log |
+| Invitations 3 | Accept invitation | 200 — as the teammate; needs `invitationToken` pasted from the log |
 | Invitations 4 | Cancel invitation | 204 — the token stops working immediately |
 | Projects 1 | Create project | 201 — captures `projectId`; key derived from the name |
 | Projects 2 | List projects | 200 — filtered by what you can see |
 | Projects 3 | Get project | 200 — a private project answers 404 to outsiders |
 | Projects 4 | Update project | 200 — workspace ADMIN only |
 | Projects 5 | List project members | 200 — creator is TEAM_LEADER |
-| Projects 6 | Add project member | 201 — needs `memberUserId`, already in the workspace |
+| Projects 6 | Add project member | 201 — the teammate, once they have joined the workspace |
 | Projects 7 | Delete project | 204 — soft delete; frees the key |
 | Sprints 1 | Create sprint | 201 — captures `sprintId`; starts PLANNED |
 | Sprints 2 | List sprints | 200 — ordered by start date |
@@ -68,7 +70,7 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Issues 6 | Reposition issue | 200 — drop between two cards, no renumbering |
 | Issues 7 | Block issue | 200 — DELETE the same path to clear |
 | Issues 8 | Create subtask | 201 — one level deep only |
-| Assignees 1 | Assign | 200 — idempotent; needs `memberUserId` |
+| Assignees 1 | Assign | 200 — idempotent; assigns the teammate, who is notified |
 | Assignees 2 | List assignees | 200 — names and avatars, in assignment order |
 | Assignees 3 | Unassign | 204 — idempotent |
 | Assignees 4 | Bulk assign | 200 — adds, never replaces; all or nothing |
@@ -88,32 +90,38 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Links 2 | Add blocking link | 201 — blocker BLOCKS issue; captures `linkId`, issue becomes blocked |
 | Links 3 | List links | 200 — both directions, with the other issue's identifier and title |
 | Links 4 | Remove link | 204 — the last BLOCKS link going clears the flag |
-| Notifications 1 | List notifications | 200 — newest first; captures `notificationId` when there is one |
-| Notifications 2 | Unread count | 200 — `meta.total` is the bell's number |
-| Notifications 3 | Mark as read | 200 — needs a notification; see below |
-| Notifications 4 | Mark all as read | 204 |
-| Notifications 5 | Dismiss notification | 204 — deleted for good |
-| Notifications 6 | Get preferences | 200 — all 10 actions, defaults filled in |
-| Notifications 7 | Update preferences | 200 — only what you list changes |
+| Notifications 1 | Teammate mentions you | 201 — runs as the teammate; puts a mention in your inbox |
+| Notifications 2 | List notifications | 200 — newest first; captures `notificationId` |
+| Notifications 3 | Unread count | 200 — `meta.total` is the bell's number |
+| Notifications 4 | Mark as read | 200 — idempotent; keeps the first `readAt` |
+| Notifications 5 | Mark all as read | 204 |
+| Notifications 6 | Dismiss notification | 204 — deleted for good |
+| Notifications 7 | Get preferences | 200 — all 10 actions, defaults filled in |
+| Notifications 8 | Update preferences | 200 — only what you list changes |
 
-Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
-environment (`john@example.com` / `supersecret`). Change it there and the whole collection
-follows — never in a request's Vars tab, because request-scoped variables outrank environment
-ones and only affect the single request you edited.
+You are `userEmail` / `userPassword` from the **Local** environment (`john@example.com` /
+`supersecret`), and every request runs as you unless it says otherwise. Change it there and the
+whole collection follows — never in a request's Vars tab, because request-scoped variables
+outrank environment ones and only affect the single request you edited.
 
-The only ordering requirement is Register before the rest on a fresh database; `accessToken`
-is set by Login and persists between runs.
+A second account, the **teammate** at `inviteEmail` / `teammatePassword`, exists so there is
+someone to invite, assign and be notified by. Auth 8 and 9 create it and capture `teammateToken`
+and `memberUserId`. The few requests that act as the teammate (Invitations 3, Notifications 1)
+say so with their own bearer auth; nothing else changes accounts.
+
+On a fresh database: Register, Login, Register teammate and Login teammate, then the rest in
+order. Accepting the invitation still needs `invitationToken` pasted from the application log —
+the token exists only in the email, by design.
 
 Each request carries an `assert` block, so **Run Folder** on `Auth` or the whole collection
 works as a smoke test rather than something you have to eyeball.
 
 ## Notes
 
-- Nobody is notified about their own actions, so the single account's inbox stays empty and
-  Notifications 3 and 5 fail until someone else acts. Assigning `memberUserId` (Assignees 1)
-  notifies that teammate; log in as them to watch their bell fill up.
-- Tokens last 15 minutes. When `Get me` starts returning 401, re-run Login.
+- Nobody is notified about their own actions — that is why Notifications 1 runs as the
+  teammate. Assigning `memberUserId` (Assignees 1) works the other way round: log in as the
+  teammate to see it arrive.
+- Notification emails are queued and sent by a poller every 10 seconds, so the
+  `[stub email] notification` log line appears shortly after the request, not during it.
+- Tokens last 15 minutes. When `Get me` starts returning 401, re-run Login (or Refresh).
 - Emails are normalized, so `DEV@SIMPLIRA.COM` and `dev@simplira.com` are the same account.
-- `/actuator/health` currently returns 401 — every route except register and login requires
-  authentication, actuator included. Worth changing before anything tries to health-check the app.
-- There is no refresh or logout endpoint yet, so the collection stops at the access token.

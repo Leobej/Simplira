@@ -1,0 +1,38 @@
+meta {
+  name: Teammate mentions you
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{teammateToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "content": "@[John]({{userId}}) the bell should light up for this one."
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Runs as the teammate (Auth/Login teammate), who must have joined the workspace through
+  Invitations/Accept invitation. Nobody is notified about their own actions, so this is what puts
+  something in your inbox: a MENTIONED notification, which the rest of this folder reads, marks
+  and dismisses.
+
+  Every run adds one, so Mark as read and Dismiss always have something to act on.
+}

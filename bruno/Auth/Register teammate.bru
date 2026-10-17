@@ -1,0 +1,34 @@
+meta {
+  name: Register teammate
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{inviteEmail}}",
+    "password": "{{teammatePassword}}",
+    "fullName": "Teammate"
+  }
+}
+
+tests {
+  test("creates the teammate, or reports it already exists", function() {
+    expect(res.getStatus()).to.be.oneOf([201, 409]);
+  });
+}
+
+docs {
+  A second account, at the inviteEmail address, so the collection has someone other than you to
+  invite, assign and be notified by. 201 the first time, 409 after - both pass.
+}

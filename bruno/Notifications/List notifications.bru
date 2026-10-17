@@ -1,7 +1,7 @@
 meta {
   name: List notifications
   type: http
-  seq: 1
+  seq: 2
 }
 
 get {
@@ -27,9 +27,5 @@ assert {
 
 docs {
   Newest first. Add workspaceId=... to narrow to one workspace, unread=true for unread only.
-  Captures the newest notificationId when there is one.
-
-  Nobody is notified about their own actions, so with the collection's single account this list
-  stays empty until someone else assigns, mentions or links to you. Log in as the teammate (the
-  member whose id is memberUserId) to see what the other folders sent them.
+  Captures the newest notificationId - the mention the previous request just sent you.
 }
