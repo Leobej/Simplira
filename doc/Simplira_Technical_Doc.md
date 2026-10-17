@@ -536,9 +536,16 @@ Label
 - color             VARCHAR, NOT NULL              -- hex code e.g. #FF5733
 - created_by        UUID, FK → User, NOT NULL
 - created_at        TIMESTAMPTZ, NOT NULL
+- deleted_at        TIMESTAMPTZ, NULLABLE
+- deleted_by        UUID, FK → User, NULLABLE
 
-UNIQUE (project_id, name)
+UNIQUE (project_id, name) WHERE deleted_at IS NULL
 ```
+
+> **As built (V18):** soft-deleted like the other per-project vocabularies (§21), so the name is
+> held by a partial unique index rather than a constraint and a deleted label frees it. `color`
+> is validated as `#RRGGBB` at the API. Creating, renaming, recolouring and deleting are a
+> TEAM_LEADER's (or ADMIN's); attaching and detaching are anyone's with access to the issue.
 
 ### IssueLabel
 
@@ -549,6 +556,12 @@ IssueLabel
 
 PRIMARY KEY (issue_id, label_id)
 ```
+
+> **As built (V19):** the composite key already indexes `issue_id`, so only `label_id` gets its
+> own index — the filter in §34 and label deletion both go through it. Attaching is idempotent
+> (`ON CONFLICT DO NOTHING`), and a label from another project is `LABEL_NOT_FOUND`: an issue only
+> wears its own project's labels. Deleting a label soft-deletes the label but **hard-deletes its
+> IssueLabel rows**, so no issue is left wearing a label nobody can see or pick any more.
 
 ### Attachment
 
@@ -986,10 +999,15 @@ DELETE /api/v1/issues/{issueId}/links/{linkId}                      👤 Delete 
 GET    /api/v1/projects/{projectId}/labels                          👤 List labels
 POST   /api/v1/projects/{projectId}/labels                          👥 Create label
 PATCH  /api/v1/projects/{projectId}/labels/{labelId}                👥 Update label
-DELETE /api/v1/projects/{projectId}/labels/{labelId}                👥 Delete label
-POST   /api/v1/issues/{issueId}/labels                              👤 Add label to issue
+DELETE /api/v1/projects/{projectId}/labels/{labelId}                👥 Delete label (soft; detached everywhere)
+GET    /api/v1/issues/{issueId}/labels                              👤 List an issue's labels
+POST   /api/v1/issues/{issueId}/labels                              👤 Add label to issue (idempotent)
 DELETE /api/v1/issues/{issueId}/labels/{labelId}                    👤 Remove from issue
 ```
+
+> `POST /issues/{id}/labels` takes `{ "labelId": "..." }` and answers 200 with the issue's full
+> label list, the same shape as assignees, so a client re-renders from one response. Issue
+> responses carry `labelIds` alongside `assigneeIds`.
 
 ### Comment Endpoints
 
@@ -1065,14 +1083,14 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 | Subtasks | 2 |
 | Issue Assignees | 3 |
 | Issue Links | 3 |
-| Labels | 6 |
+| Labels | 7 |
 | Comments | 4 |
 | Attachments | 3 |
 | Notifications | 4 |
 | Notification Preferences | 2 |
 | Audit Log | 3 |
 | Charts | 3 |
-| **Total** | **99** |
+| **Total** | **100** |
 
 ---
 
@@ -1453,7 +1471,9 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V14__create_issues.sql                     -- status_id, number, float positions, version
 ├── V15__create_issue_assignees.sql            -- unique per (issue, user); indexed by user too
 ├── V16__create_comments.sql                   -- soft delete
-└── V17__create_comment_mentions.sql           -- unique per (comment, user); indexed by user
+├── V17__create_comment_mentions.sql           -- unique per (comment, user); indexed by user
+├── V18__create_labels.sql                     -- name partial-unique per project, soft delete
+└── V19__create_issue_labels.sql               -- composite PK; indexed by label too
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1461,9 +1481,7 @@ applied, so a slot held open for a table built later fails on every database tha
 higher number first. Email verification was originally penciled in as V3 and is a live example.
 
     create_email_verification_tokens.sql
-    create_labels.sql
     create_issue_links.sql
-    create_issue_labels.sql
     create_attachments.sql
     create_notifications.sql
     create_notification_preferences.sql
@@ -3328,7 +3346,7 @@ Now deleted records are excluded from uniqueness checks. A slug or name previous
 | Attachment | ✅ deleted_at + deleted_by |
 | Workspace | ✅ deleted_at (added above) |
 | IssueType | ✅ deleted_at + deleted_by (added above) |
-| Label | ✅ deleted_at (partial index fix above) |
+| Label | ✅ deleted_at + deleted_by (as built, V18) |
 | Project | ⬜ not needed — deleting cascades |
 | Sprint | ⬜ not needed |
 
@@ -4192,7 +4210,11 @@ omits the join-table migrations; the canonical list includes them and is FK-orde
 > **As built:** `statusCategory`, `statusId`, `typeId`, `priority`, `reporterId`, `isBlocked`,
 > `dueBefore`, `dueAfter` and `q` all work, on both list endpoints, with `page` and `pageSize`
 > feeding the `meta` block of the envelope. `assigneeId` and `unassigned` are wired through
-> subqueries on `issue_assignees`; `labelId` is not, since labels do not exist yet.
+> subqueries on `issue_assignees`, and `labelId` through subqueries on `issue_labels`.
+>
+> `labelId` is repeatable and means **AND**: `?labelId=A&labelId=B` returns issues wearing both,
+> one subquery per id. OR is not offered — every other filter here combines with AND, and a
+> single meaning keeps the parameter predictable.
 >
 > Since statuses are per project, a `statusCategory` is resolved to that project's status ids
 > before the query runs rather than joined at the database level — which is also why the sprint
@@ -4211,7 +4233,7 @@ same filter set.
 &reporterId={uuid}                 issues created by this user
 &typeId={uuid}                     by issue type
 &priority=HIGH                     LOW | MEDIUM | HIGH | CRITICAL
-&labelId={uuid}                    has this label (repeatable for AND/OR)
+&labelId={uuid}                    has this label (repeatable; all must match)
 &isBlocked=true                    only blocked / only unblocked
 &unassigned=true                   issues with no assignee
 &dueBefore=2026-07-01              due date upper bound
