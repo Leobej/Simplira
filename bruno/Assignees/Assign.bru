@@ -1,0 +1,36 @@
+meta {
+  name: Assign
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/assignees
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "userId": "{{memberUserId}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Run Issues/Create issue first, and set memberUserId to somebody in the workspace (Workspaces/
+  List members has the ids). Assigning yourself works too.
+
+  Answers 200 with the issue's whole assignee list, not 201: assigning is idempotent, so running
+  this twice changes nothing the second time.
+
+  The assignee has to be able to see the project. On a PRIVATE project that means being on it;
+  anyone else is 409 ASSIGNEE_CANNOT_SEE_PROJECT.
+}

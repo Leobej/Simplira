@@ -1,0 +1,36 @@
+meta {
+  name: Bulk assign
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/issues/bulk-assign
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "userId": "{{memberUserId}}",
+    "issueIds": ["{{issueId}}"]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Workspace ADMIN or TEAM_LEADER on the project - a developer gets 403. Up to 100 issues.
+
+  Adds, never replaces, so it cannot strip anyone else off an issue. The response counts how many
+  were newly assigned and how many already were.
+
+  Every issue id is checked before anything is written: one id from another project fails the
+  whole request with 404 and assigns nothing at all.
+}

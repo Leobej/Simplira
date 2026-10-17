@@ -68,6 +68,10 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Issues 6 | Reposition issue | 200 — drop between two cards, no renumbering |
 | Issues 7 | Block issue | 200 — DELETE the same path to clear |
 | Issues 8 | Create subtask | 201 — one level deep only |
+| Assignees 1 | Assign | 200 — idempotent; needs `memberUserId` |
+| Assignees 2 | List assignees | 200 — names and avatars, in assignment order |
+| Assignees 3 | Unassign | 204 — idempotent |
+| Assignees 4 | Bulk assign | 200 — adds, never replaces; all or nothing |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

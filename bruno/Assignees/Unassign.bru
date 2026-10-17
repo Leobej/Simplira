@@ -1,0 +1,19 @@
+meta {
+  name: Unassign
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/assignees/{{memberUserId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Idempotent: removing somebody who is not assigned is still 204.
+}

@@ -1,0 +1,20 @@
+meta {
+  name: List assignees
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/assignees
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Names, emails and avatars, in the order they were assigned. The issue itself only carries
+  assigneeIds, since a client rendering a board already holds the member list.
+}
