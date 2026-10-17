@@ -14,6 +14,7 @@ import io.github.leobej.domain.model.issue.IssuePage;
 import io.github.leobej.domain.model.issue.IssuePriority;
 import io.github.leobej.domain.model.issue.IssueStatusCategory;
 import io.github.leobej.domain.model.user.User;
+import io.github.leobej.domain.service.IssueAssigneeService;
 import io.github.leobej.domain.service.IssueService;
 import io.github.leobej.infrastructure.security.CurrentUser;
 import jakarta.validation.Valid;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -32,9 +34,11 @@ public class IssueController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final IssueService issueService;
+    private final IssueAssigneeService issueAssigneeService;
 
-    public IssueController(IssueService issueService) {
+    public IssueController(IssueService issueService, IssueAssigneeService issueAssigneeService) {
         this.issueService = issueService;
+        this.issueAssigneeService = issueAssigneeService;
     }
 
     @GetMapping("/projects/{projectId}/issues")
@@ -133,9 +137,7 @@ public class IssueController {
         String key = subtasks.isEmpty()
                 ? null
                 : issueService.projectKey(subtasks.get(0).getProjectId());
-        return ApiResponse.success(subtasks.stream()
-                .map(subtask -> IssueResponse.from(subtask, key))
-                .toList());
+        return ApiResponse.success(responses(subtasks, key));
     }
 
     @PostMapping("/issues/{issueId}/subtasks")
@@ -150,15 +152,23 @@ public class IssueController {
     }
 
     private ApiResponse<IssueResponse> single(Issue issue) {
-        return ApiResponse.success(
-                IssueResponse.from(issue, issueService.projectKey(issue.getProjectId())));
+        String key = issueService.projectKey(issue.getProjectId());
+        return ApiResponse.success(responses(List.of(issue), key).get(0));
     }
 
     private ApiResponse<List<IssueResponse>> page(IssuePage result, UUID projectId) {
         String key = projectId == null ? null : issueService.projectKey(projectId);
-        return ApiResponse.success(
-                result.items().stream().map(issue -> IssueResponse.from(issue, key)).toList(),
+        return ApiResponse.success(responses(result.items(), key),
                 new PageMeta(result.page(), result.pageSize(), result.total()));
+    }
+
+    // Assignees for the whole batch in one query, so a board of fifty cards is not fifty queries.
+    private List<IssueResponse> responses(List<Issue> issues, String key) {
+        Map<UUID, List<UUID>> assignees = issueAssigneeService.assigneeIds(
+                issues.stream().map(Issue::getId).toList());
+        return issues.stream()
+                .map(issue -> IssueResponse.from(issue, key, assignees.getOrDefault(issue.getId(), List.of())))
+                .toList();
     }
 
     // §34 folds filtering into the list endpoints as query parameters rather than adding new ones.
@@ -168,6 +178,8 @@ public class IssueController {
             UUID typeId,
             IssuePriority priority,
             UUID reporterId,
+            UUID assigneeId,
+            Boolean unassigned,
             Boolean isBlocked,
             LocalDate dueBefore,
             LocalDate dueAfter,
@@ -193,7 +205,8 @@ public class IssueController {
                     : Math.min(pageSize, MAX_PAGE_SIZE);
 
             return new IssueFilter(projectId, sprintId, backlogOnly, statusIds, typeId, priority,
-                    reporterId, isBlocked, dueBefore, dueAfter, q, true, resolvedPage, resolvedSize);
+                    reporterId, assigneeId, Boolean.TRUE.equals(unassigned), isBlocked, dueBefore,
+                    dueAfter, q, true, resolvedPage, resolvedSize);
         }
     }
 }

@@ -7,7 +7,10 @@ import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.infrastructure.persistence.postgres.entity.IssueEntity;
 import io.github.leobej.infrastructure.persistence.postgres.jpa.JpaIssueRepository;
 import io.github.leobej.infrastructure.persistence.postgres.mapper.IssueEntityMapper;
+import io.github.leobej.infrastructure.persistence.postgres.entity.IssueAssigneeEntity;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -76,6 +79,20 @@ public class IssueRepositoryAdapter implements IssueRepository {
             }
             if (filter.reporterId() != null) {
                 predicates.add(builder.equal(root.get("reporterId"), filter.reporterId()));
+            }
+            if (filter.assigneeId() != null) {
+                Subquery<UUID> assigned = query.subquery(UUID.class);
+                Root<IssueAssigneeEntity> assignee = assigned.from(IssueAssigneeEntity.class);
+                assigned.select(assignee.get("issueId"))
+                        .where(builder.equal(assignee.get("userId"), filter.assigneeId()));
+                predicates.add(root.get("id").in(assigned));
+            }
+            if (filter.unassignedOnly()) {
+                Subquery<UUID> anyone = query.subquery(UUID.class);
+                Root<IssueAssigneeEntity> assignee = anyone.from(IssueAssigneeEntity.class);
+                anyone.select(assignee.get("issueId"))
+                        .where(builder.equal(assignee.get("issueId"), root.get("id")));
+                predicates.add(builder.not(builder.exists(anyone)));
             }
             if (filter.blocked() != null) {
                 predicates.add(builder.equal(root.get("blocked"), filter.blocked()));

@@ -5,6 +5,7 @@ import io.github.leobej.domain.model.issue.IssuePriority;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record IssueResponse(
@@ -28,11 +29,14 @@ public record IssueResponse(
         LocalDate dueDate,
         Double backlogPosition,
         Double sprintPosition,
+        // Ids only: the client already holds the member list, so names would be duplicated
+        // on every card of every page.
+        List<UUID> assigneeIds,
         long version,
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static IssueResponse from(Issue issue, String projectKey) {
+    public static IssueResponse from(Issue issue, String projectKey, List<UUID> assigneeIds) {
         return new IssueResponse(
                 issue.getId(),
                 issue.getProjectId(),
@@ -53,6 +57,7 @@ public record IssueResponse(
                 issue.getDueDate(),
                 issue.getBacklogPosition(),
                 issue.getSprintPosition(),
+                assigneeIds == null ? List.of() : assigneeIds,
                 issue.getVersion(),
                 issue.getCreatedAt(),
                 issue.getUpdatedAt()

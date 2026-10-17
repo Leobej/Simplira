@@ -14,6 +14,8 @@ public record IssueFilter(
         UUID typeId,
         IssuePriority priority,
         UUID reporterId,
+        UUID assigneeId,
+        boolean unassignedOnly,
         Boolean blocked,
         LocalDate dueBefore,
         LocalDate dueAfter,
