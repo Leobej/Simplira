@@ -41,19 +41,22 @@ public class IssueService {
     private final ProjectRepository projectRepository;
     private final SprintRepository sprintRepository;
     private final ProjectAuthorization projectAuthorization;
+    private final BlockedFlagSync blockedFlagSync;
 
     public IssueService(IssueRepository issueRepository,
                         IssueTypeRepository issueTypeRepository,
                         IssueStatusRepository issueStatusRepository,
                         ProjectRepository projectRepository,
                         SprintRepository sprintRepository,
-                        ProjectAuthorization projectAuthorization) {
+                        ProjectAuthorization projectAuthorization,
+                        BlockedFlagSync blockedFlagSync) {
         this.issueRepository = issueRepository;
         this.issueTypeRepository = issueTypeRepository;
         this.issueStatusRepository = issueStatusRepository;
         this.projectRepository = projectRepository;
         this.sprintRepository = sprintRepository;
         this.projectAuthorization = projectAuthorization;
+        this.blockedFlagSync = blockedFlagSync;
     }
 
     public Issue create(UUID projectId,
@@ -186,12 +189,18 @@ public class IssueService {
         projectAuthorization.requireAccess(issue.getProjectId(), actorId);
 
         // Subtasks have no meaning without their parent, so they go with it.
-        issueRepository.findSubtasks(issueId).forEach(subtask -> {
+        List<Issue> subtasks = issueRepository.findSubtasks(issueId);
+        subtasks.forEach(subtask -> {
             subtask.delete();
             issueRepository.save(subtask);
         });
         issue.delete();
         issueRepository.save(issue);
+
+        // Links last: re-checking what these issues blocked writes to other issues, and the
+        // parent saved just above could have been one of them.
+        subtasks.forEach(subtask -> blockedFlagSync.issueDeleted(subtask.getId()));
+        blockedFlagSync.issueDeleted(issueId);
     }
 
     public Issue block(UUID issueId, String reason, UUID actorId) {
@@ -204,7 +213,7 @@ public class IssueService {
     public Issue unblock(UUID issueId, UUID actorId) {
         Issue issue = loadIssue(issueId);
         projectAuthorization.requireAccess(issue.getProjectId(), actorId);
-        issue.unblock();
+        issue.unblock(blockedFlagSync.blockedByLinks(issueId));
         return issueRepository.save(issue);
     }
 

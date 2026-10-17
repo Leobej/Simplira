@@ -4,6 +4,7 @@ import io.github.leobej.domain.model.issue.Issue;
 import io.github.leobej.domain.model.issue.IssueFilter;
 import io.github.leobej.domain.model.issue.IssuePage;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +14,7 @@ public interface IssueRepository {
 
     // Soft-deleted issues are invisible to every read below.
     Optional<Issue> findById(UUID id);
+    List<Issue> findAllById(Collection<UUID> ids);
     Optional<Issue> findByNumber(UUID projectId, int number);
     IssuePage search(IssueFilter filter);
     List<Issue> findSubtasks(UUID parentId);

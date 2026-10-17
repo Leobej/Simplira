@@ -9,6 +9,7 @@ import io.github.leobej.shared.exception.BusinessRuleException;
 import io.github.leobej.shared.exception.CommentNotFoundException;
 import io.github.leobej.shared.exception.DuplicateNameException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
+import io.github.leobej.shared.exception.IssueLinkNotFoundException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.IssueTypeNotFoundException;
 import io.github.leobej.shared.exception.IssueVersionConflictException;
@@ -215,5 +216,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Void> handleLabelNotFound(LabelNotFoundException ex) {
         return ApiResponse.failure(ErrorResponse.of("LABEL_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(IssueLinkNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleIssueLinkNotFound(IssueLinkNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("ISSUE_LINK_NOT_FOUND", ex.getMessage()));
     }
 }

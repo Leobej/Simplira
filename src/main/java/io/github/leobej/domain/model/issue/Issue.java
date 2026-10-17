@@ -122,16 +122,31 @@ public class Issue {
         this.touch();
     }
 
+    // The flag has two sources: a manual block, which always has a reason, and BLOCKS links (§4).
+    // It is up while either is, and each side clears only its own half.
     public void block(String reason) {
         this.blocked = true;
         this.blockedReason = reason;
         this.touch();
     }
 
-    public void unblock() {
-        this.blocked = false;
+    // Lifts the manual block only. A BLOCKS link still pointing here keeps the flag up until the
+    // link goes, so the flag never reads "clear" while something is in the way.
+    public void unblock(boolean blockedByLinks) {
+        this.blocked = blockedByLinks;
         this.blockedReason = null;
         this.touch();
+    }
+
+    // The link-driven half. Returns whether the flag moved, so callers only write when it did.
+    public boolean applyLinkBlocking(boolean blockedByLinks) {
+        boolean nowBlocked = blockedReason != null || blockedByLinks;
+        if (nowBlocked == blocked) {
+            return false;
+        }
+        this.blocked = nowBlocked;
+        this.touch();
+        return true;
     }
 
     public void moveToSprint(UUID targetSprintId, double position) {

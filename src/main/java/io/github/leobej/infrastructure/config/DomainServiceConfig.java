@@ -9,6 +9,7 @@ import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
 import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
 import io.github.leobej.domain.repository.IssueAssigneeRepository;
+import io.github.leobej.domain.repository.IssueLinkRepository;
 import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
@@ -21,9 +22,11 @@ import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AssignmentRevoker;
 import io.github.leobej.domain.service.AuthService;
+import io.github.leobej.domain.service.BlockedFlagSync;
 import io.github.leobej.domain.service.CommentService;
 import io.github.leobej.domain.service.InvitationService;
 import io.github.leobej.domain.service.IssueAssigneeService;
+import io.github.leobej.domain.service.IssueLinkService;
 import io.github.leobej.domain.service.IssueService;
 import io.github.leobej.domain.service.IssueStatusService;
 import io.github.leobej.domain.service.IssueTypeService;
@@ -136,14 +139,30 @@ public class DomainServiceConfig {
     }
 
     @Bean
+    public BlockedFlagSync blockedFlagSync(IssueRepository issueRepository,
+                                           IssueLinkRepository issueLinkRepository) {
+        return new BlockedFlagSync(issueRepository, issueLinkRepository);
+    }
+
+    @Bean
     public IssueService issueService(IssueRepository issueRepository,
                                      IssueTypeRepository issueTypeRepository,
                                      IssueStatusRepository issueStatusRepository,
                                      ProjectRepository projectRepository,
                                      SprintRepository sprintRepository,
-                                     ProjectAuthorization projectAuthorization) {
+                                     ProjectAuthorization projectAuthorization,
+                                     BlockedFlagSync blockedFlagSync) {
         return new IssueService(issueRepository, issueTypeRepository, issueStatusRepository,
-                projectRepository, sprintRepository, projectAuthorization);
+                projectRepository, sprintRepository, projectAuthorization, blockedFlagSync);
+    }
+
+    @Bean
+    public IssueLinkService issueLinkService(IssueLinkRepository issueLinkRepository,
+                                             IssueRepository issueRepository,
+                                             ProjectAuthorization projectAuthorization,
+                                             BlockedFlagSync blockedFlagSync) {
+        return new IssueLinkService(issueLinkRepository, issueRepository, projectAuthorization,
+                blockedFlagSync);
     }
 
     @Bean

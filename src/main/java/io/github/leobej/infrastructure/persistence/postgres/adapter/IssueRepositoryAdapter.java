@@ -20,6 +20,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -44,6 +45,16 @@ public class IssueRepositoryAdapter implements IssueRepository {
     @Override
     public Optional<Issue> findById(UUID id) {
         return jpaRepository.findByIdAndDeletedAtIsNull(id).map(IssueEntityMapper::toDomain);
+    }
+
+    @Override
+    public List<Issue> findAllById(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findByIdInAndDeletedAtIsNull(ids).stream()
+                .map(IssueEntityMapper::toDomain)
+                .toList();
     }
 
     @Override
