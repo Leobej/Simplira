@@ -717,6 +717,41 @@ AuditLog
 > old_value: { "status": "TODO" }
 > new_value: { "status": "IN_PROGRESS" }
 
+> **As built (V25):**
+> - **Append-only, enforced by the database.** A trigger refuses UPDATE and DELETE on
+>   `audit_log`, and no foreign key cascades into it — history that code can edit is not history.
+>   Changing a past entry would take a migration that drops the trigger on purpose.
+> - **Written explicitly, not by an aspect.** Services call `AuditTrail` once a change is saved,
+>   like `Notifier`. §10's AOP sketch cannot see the state *before* a change, which `old_value`
+>   needs, and would hide domain behaviour inside a Spring proxy. Written synchronously, one
+>   INSERT, rather than through a queue (§8): a log that can lag behind or be lost with a broker
+>   is weaker for no real saving.
+> - **Only what changed.** `UPDATED` entries keep just the fields that moved; an update that
+>   moved nothing writes no entry. Status changes store `statusId`, `statusName` and `category`
+>   (§33), so the history still reads correctly after a status is renamed or deleted.
+> - **Entity types** gained `WORKSPACE`. `MEMBER` entries use the member's user id as
+>   `entity_id`, with a `project_id` for project memberships. Comment entries also carry the
+>   `issue_id`, so an issue's history includes what was said on it.
+> - **Actions** gained the inverses §4 lacked — `UNLINKED`, `UNLABELED`, `UNBLOCKED` — plus
+>   `LABELED`, `BLOCKED` and `MOVED` (sprint ↔ backlog, including carry-over at sprint close,
+>   with `"reason": "SPRINT_CLOSED"`).
+>
+>   | Entity | Recorded |
+>   |---|---|
+>   | ISSUE | created, updated, deleted (and its subtasks), status changed / closed, assigned / unassigned, blocked / unblocked (manual), linked / unlinked (on both issues), labeled / unlabeled, moved |
+>   | COMMENT | created (content), edited (old and new content), deleted (author kept, for moderation) |
+>   | SPRINT | created, updated, deleted, started, closed (action, target, how many carried over) |
+>   | PROJECT | created, updated, deleted |
+>   | MEMBER | joined through an invitation, role changed, removed, left — workspace and project |
+>   | WORKSPACE | created, updated, deleted |
+>
+> - **Losing access is recorded.** When `AssignmentRevoker` drops an assignee, the issue gets
+>   `UNASSIGNED` with `"reason": "LOST_ACCESS"`, by whoever removed them — or by the person who
+>   left.
+> - **Not recorded:** project configuration (issue types, statuses, label definitions),
+>   invitations sent or cancelled, card reordering, and notification preferences. Repeats of
+>   idempotent actions write nothing, like notifications.
+
 ### Schema Stats
 
 | Tables | 24 |
@@ -1125,6 +1160,11 @@ GET    /api/v1/workspaces/{workspaceId}/audit-log                   🔑 Workspa
 GET    /api/v1/projects/{projectId}/audit-log                       👥 Project audit log
 GET    /api/v1/issues/{issueId}/audit-log                           👤 Issue history
 ```
+
+> All three are newest first and paged (`page`, `pageSize` — 50 by default, 100 at most). The
+> workspace log takes `actorId` to show one person's actions. Each entry carries `actorName`,
+> resolved in one query per page. Issue history for someone who cannot open the issue is
+> `ISSUE_NOT_FOUND`, as everywhere else.
 
 ### Chart Endpoints
 
@@ -1588,7 +1628,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V21__create_notifications.sql              -- indexed for the bell, unread count and purge
 ├── V22__create_notification_preferences.sql   -- overrides only; no row means both channels on
 ├── V23__rename_issue_link_check_constraints.sql -- chk_ → ck_, matching the rest of the schema
-└── V24__create_email_outbox.sql               -- notification emails, sent by a poller with retries
+├── V24__create_email_outbox.sql               -- notification emails, sent by a poller with retries
+└── V25__create_audit_log.sql                  -- append-only by trigger; jsonb snapshots
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1597,7 +1638,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
 
     create_email_verification_tokens.sql
     create_attachments.sql
-    create_audit_log.sql
     add_indexes.sql
 ```
 
@@ -1717,6 +1757,9 @@ Periodically normalize back to clean integers when precision runs low.
 ```
 
 ### Audit Log via Spring AOP
+
+> **Not built this way.** Services call `AuditTrail` explicitly and synchronously — see the
+> as-built note under AuditLog in §4 for why an aspect cannot fill `old_value`.
 
 Write audit entries automatically without cluttering business logic:
 
@@ -4679,6 +4722,10 @@ fit for hexagonal and is the project standard.
 > must answer `false` or it can never be removed. Comment mentions hit exactly this: they are
 > created and deleted but never updated, `isNew()` returned `true` unconditionally, and removing a
 > mention in an edit left the row behind with no error at all.
+>
+> The one deliberate exception is `AuditLogEntity`: an audit entry is never updated *or*
+> deleted — the table's trigger refuses both — so "always new" is simply true there, and it
+> saves an `existsById` on every write. The trap is a row that can be removed; that one cannot.
 
 ---
 
