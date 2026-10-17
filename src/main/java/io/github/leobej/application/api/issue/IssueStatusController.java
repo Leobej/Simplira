@@ -62,9 +62,14 @@ public class IssueStatusController {
                 request.isDefault(), user.getId())));
     }
 
+    // migrateToStatusId is a query parameter rather than §33's request body: DELETE bodies are
+    // unevenly supported by clients and proxies, and it carries one optional id.
     @DeleteMapping("/{statusId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID projectId, @PathVariable UUID statusId, @CurrentUser User user) {
-        issueStatusService.delete(projectId, statusId, user.getId());
+    public void delete(@PathVariable UUID projectId,
+                       @PathVariable UUID statusId,
+                       @RequestParam(name = "migrateToStatusId", required = false) UUID migrateToStatusId,
+                       @CurrentUser User user) {
+        issueStatusService.delete(projectId, statusId, migrateToStatusId, user.getId());
     }
 }

@@ -94,8 +94,11 @@ public class DomainServiceConfig {
 
     @Bean
     public SprintService sprintService(SprintRepository sprintRepository,
+                                       IssueRepository issueRepository,
+                                       IssueStatusRepository issueStatusRepository,
                                        ProjectAuthorization projectAuthorization) {
-        return new SprintService(sprintRepository, projectAuthorization);
+        return new SprintService(sprintRepository, issueRepository, issueStatusRepository,
+                projectAuthorization);
     }
 
     @Bean
@@ -109,14 +112,16 @@ public class DomainServiceConfig {
 
     @Bean
     public IssueTypeService issueTypeService(IssueTypeRepository issueTypeRepository,
+                                             IssueRepository issueRepository,
                                              ProjectAuthorization projectAuthorization) {
-        return new IssueTypeService(issueTypeRepository, projectAuthorization);
+        return new IssueTypeService(issueTypeRepository, issueRepository, projectAuthorization);
     }
 
     @Bean
     public IssueStatusService issueStatusService(IssueStatusRepository issueStatusRepository,
+                                                 IssueRepository issueRepository,
                                                  ProjectAuthorization projectAuthorization) {
-        return new IssueStatusService(issueStatusRepository, projectAuthorization);
+        return new IssueStatusService(issueStatusRepository, issueRepository, projectAuthorization);
     }
 
     @Bean

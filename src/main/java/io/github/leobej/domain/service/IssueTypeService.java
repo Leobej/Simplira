@@ -1,6 +1,7 @@
 package io.github.leobej.domain.service;
 
 import io.github.leobej.domain.model.issue.IssueType;
+import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
 import io.github.leobej.shared.exception.BusinessRuleException;
 import io.github.leobej.shared.exception.DuplicateNameException;
@@ -14,11 +15,14 @@ import java.util.UUID;
 public class IssueTypeService {
 
     private final IssueTypeRepository issueTypeRepository;
+    private final IssueRepository issueRepository;
     private final ProjectAuthorization projectAuthorization;
 
     public IssueTypeService(IssueTypeRepository issueTypeRepository,
+                            IssueRepository issueRepository,
                             ProjectAuthorization projectAuthorization) {
         this.issueTypeRepository = issueTypeRepository;
+        this.issueRepository = issueRepository;
         this.projectAuthorization = projectAuthorization;
     }
 
@@ -83,8 +87,13 @@ public class IssueTypeService {
             throw new BusinessRuleException("DEFAULT_ISSUE_TYPE_REQUIRED",
                     "Make another type the default before deleting this one");
         }
-        // Issues do not exist yet. Once they do, deleting a type in use has to migrate them
-        // first, the same way §33 handles statuses.
+        // Unlike statuses, §33 defines no migration for types, so a type in use is simply kept:
+        // retyping issues is a decision for whoever is reorganising the project.
+        long inUse = issueRepository.countByTypeId(typeId);
+        if (inUse > 0) {
+            throw new BusinessRuleException("ISSUE_TYPE_IN_USE",
+                    "This type is used by " + inUse + " issues; retype them first");
+        }
         type.delete(actorId);
         issueTypeRepository.save(type);
     }

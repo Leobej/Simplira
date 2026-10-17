@@ -2,6 +2,7 @@ package io.github.leobej.domain.service;
 
 import io.github.leobej.domain.model.issue.IssueStatus;
 import io.github.leobej.domain.model.issue.IssueStatusCategory;
+import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.shared.exception.BusinessRuleException;
 import io.github.leobej.shared.exception.DuplicateNameException;
@@ -17,11 +18,14 @@ import java.util.UUID;
 public class IssueStatusService {
 
     private final IssueStatusRepository issueStatusRepository;
+    private final IssueRepository issueRepository;
     private final ProjectAuthorization projectAuthorization;
 
     public IssueStatusService(IssueStatusRepository issueStatusRepository,
+                              IssueRepository issueRepository,
                               ProjectAuthorization projectAuthorization) {
         this.issueStatusRepository = issueStatusRepository;
+        this.issueRepository = issueRepository;
         this.projectAuthorization = projectAuthorization;
     }
 
@@ -74,7 +78,7 @@ public class IssueStatusService {
         return issueStatusRepository.save(status);
     }
 
-    public void delete(UUID projectId, UUID statusId, UUID actorId) {
+    public void delete(UUID projectId, UUID statusId, UUID migrateToStatusId, UUID actorId) {
         projectAuthorization.requireManage(projectId, actorId);
         IssueStatus status = loadInProject(projectId, statusId);
 
@@ -83,8 +87,22 @@ public class IssueStatusService {
             throw new BusinessRuleException("DEFAULT_ISSUE_STATUS_REQUIRED",
                     "Make another status the default before deleting this one");
         }
-        // §33 also requires migrating issues off a status before deleting it, with
-        // migrateToStatusId on the request. Nothing to migrate until issues exist.
+
+        // §33 rule 2: issues cannot be left pointing at a status that no longer exists, so the
+        // caller has to say where they go. Refusing is better than guessing a destination.
+        long inUse = issueRepository.countByStatusId(statusId);
+        if (inUse > 0) {
+            if (migrateToStatusId == null) {
+                throw new BusinessRuleException("STATUS_HAS_ISSUES",
+                        "This status holds " + inUse + " issues; pass migrateToStatusId to move them");
+            }
+            IssueStatus destination = loadInProject(projectId, migrateToStatusId);
+            if (destination.getId().equals(statusId)) {
+                throw new BusinessRuleException("STATUS_HAS_ISSUES",
+                        "Issues cannot be migrated onto the status being deleted");
+            }
+            issueRepository.migrateStatus(statusId, destination.getId());
+        }
         status.delete(actorId);
         issueStatusRepository.save(status);
     }

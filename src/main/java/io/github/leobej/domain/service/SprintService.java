@@ -1,6 +1,12 @@
 package io.github.leobej.domain.service;
 
+import io.github.leobej.domain.model.issue.Issue;
+import io.github.leobej.domain.model.issue.IssueStatus;
+import io.github.leobej.domain.model.issue.IssueStatusCategory;
+import io.github.leobej.domain.model.sprint.IncompleteIssueAction;
 import io.github.leobej.domain.model.sprint.Sprint;
+import io.github.leobej.domain.repository.IssueRepository;
+import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.SprintRepository;
 import io.github.leobej.shared.exception.InvalidSprintTransitionException;
 import io.github.leobej.shared.exception.ProjectNotFoundException;
@@ -15,11 +21,20 @@ import java.util.UUID;
 // Wired as a bean by infrastructure.config.DomainServiceConfig.
 public class SprintService {
 
+    private static final double POSITION_GAP = 1024d;
+
     private final SprintRepository sprintRepository;
+    private final IssueRepository issueRepository;
+    private final IssueStatusRepository issueStatusRepository;
     private final ProjectAuthorization projectAuthorization;
 
-    public SprintService(SprintRepository sprintRepository, ProjectAuthorization projectAuthorization) {
+    public SprintService(SprintRepository sprintRepository,
+                         IssueRepository issueRepository,
+                         IssueStatusRepository issueStatusRepository,
+                         ProjectAuthorization projectAuthorization) {
         this.sprintRepository = sprintRepository;
+        this.issueRepository = issueRepository;
+        this.issueStatusRepository = issueStatusRepository;
         this.projectAuthorization = projectAuthorization;
     }
 
@@ -75,14 +90,15 @@ public class SprintService {
         return sprintRepository.save(sprint);
     }
 
-    // The incomplete-issue handling from §29 is not wired yet - issues do not exist. The request
-    // shape is already honoured so clients do not have to change later, and the target sprint is
-    // validated now; moving issues is the only part still missing.
-    public Sprint close(UUID sprintId, UUID targetSprintId, UUID actorId) {
+    // §29: closing a sprint has to decide what happens to work that did not finish. Nothing is
+    // silently stranded on a closed board - it either returns to the backlog or follows the team
+    // into the next sprint.
+    public Sprint close(UUID sprintId, IncompleteIssueAction action, UUID targetSprintId, UUID actorId) {
         Sprint sprint = requireManageable(sprintId, actorId);
 
-        if (targetSprintId != null) {
-            Sprint target = loadSprint(targetSprintId);
+        Sprint target = null;
+        if (action == IncompleteIssueAction.MOVE_TO_SPRINT) {
+            target = loadSprint(targetSprintId);
             if (!target.getProjectId().equals(sprint.getProjectId())) {
                 throw new SprintNotFoundException(targetSprintId);
             }
@@ -91,8 +107,34 @@ public class SprintService {
                         "Incomplete issues cannot be moved into a COMPLETED sprint");
             }
         }
+
+        moveIncompleteIssues(sprint, target);
         sprint.close();
         return sprintRepository.save(sprint);
+    }
+
+    // "Incomplete" is defined by the status category, never by the name, so a project that calls
+    // its finished column "Shipped" still carries the right issues over (§33).
+    private void moveIncompleteIssues(Sprint sprint, Sprint target) {
+        List<UUID> doneStatusIds = issueStatusRepository.findByProjectId(sprint.getProjectId()).stream()
+                .filter(status -> status.getCategory() == IssueStatusCategory.DONE)
+                .map(IssueStatus::getId)
+                .toList();
+
+        List<Issue> carried = issueRepository.findBySprintId(sprint.getId()).stream()
+                .filter(issue -> !doneStatusIds.contains(issue.getStatusId()))
+                .toList();
+
+        for (Issue issue : carried) {
+            if (target == null) {
+                issue.moveToBacklog(
+                        issueRepository.maxBacklogPosition(issue.getProjectId()) + POSITION_GAP);
+            } else {
+                issue.moveToSprint(target.getId(),
+                        issueRepository.maxSprintPosition(target.getId()) + POSITION_GAP);
+            }
+            issueRepository.save(issue);
+        }
     }
 
     private Sprint requireManageable(UUID sprintId, UUID actorId) {

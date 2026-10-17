@@ -71,7 +71,7 @@ public class SprintController {
     public ApiResponse<SprintResponse> close(@PathVariable UUID sprintId,
                                              @Valid @RequestBody CloseSprintRequest request,
                                              @CurrentUser User user) {
-        return ApiResponse.success(SprintResponse.from(
-                sprintService.close(sprintId, request.targetSprintId(), user.getId())));
+        return ApiResponse.success(SprintResponse.from(sprintService.close(
+                sprintId, request.incompleteIssueAction(), request.targetSprintId(), user.getId())));
     }
 }
