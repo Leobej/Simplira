@@ -670,11 +670,10 @@ Notification
 >   deleting them; the purge takes them at expiry like any other.
 > - The purge runs nightly at 02:00 from `infrastructure/scheduling/ScheduledJobs`; retention is
 >   `simplira.notifications.expiry-days` (90).
-> - **Not built yet:** real-time push (§8) — a client polls `GET /notifications?unread=true` until
->   the WebSocket slice lands, which hooks in at `Notifier.deliver`, the one place a notification is
->   created. The email channel goes through `EmailService.sendNotification`, which is still the
->   logging stub, synchronously; a real provider should move it onto a queue (§8, "RabbitMQ
->   Additional Uses").
+> - **Delivery.** In-app: saved, then pushed over the WebSocket to the recipient's open sessions
+>   (§8) through the `NotificationPublisher` port — best effort, since the row is already saved and
+>   the client catches up from `GET /notifications`. Email: queued in `email_outbox` (V24), never
+>   sent inside the request; see "Email outbox" in §8.
 
 ### NotificationPreference
 
@@ -1173,6 +1172,40 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 
 ## 8. WebSocket & Real-Time
 
+> **As built:**
+> - **Endpoint** `/ws`, plain WebSocket, no SockJS: the web and Android clients both speak
+>   WebSocket natively, and SockJS's fallback transports cannot carry the Authorization header
+>   below. Browser origins are limited to `simplira.app.base-url`.
+> - **Authentication.** The handshake is public (a browser cannot put a bearer token on it). The
+>   access token goes on the STOMP CONNECT frame as `Authorization: Bearer …` and is checked by
+>   `StompAuthenticationInterceptor` the way the REST filter checks it; a bad or missing one gets
+>   an ERROR frame. It is checked once: a connection outlives the 15-minute token, and logout does
+>   not close it.
+> - **What a client can do.** SUBSCRIBE to `/user/queue/notifications` and nothing else; SEND is
+>   refused. Anything new is opted in by adding it to the interceptor's list, the same way new REST
+>   endpoints start private. A raw `/queue/...` name is refused because it could be used to listen
+>   to another session's user queue.
+> - **Notifications** use Spring's user destinations rather than `/topic/user/{userId}/...`
+>   below: `/user/queue/notifications` reaches only the connected user, so there is no user id in
+>   the destination to check. The payload is `{ "type": "NOTIFICATION_CREATED", ... }` with the
+>   same fields as an item from `GET /notifications`.
+> - **Broker.** Spring's in-memory simple broker, not the RabbitMQ relay: one instance runs today.
+>   Going multi-instance is a change to `WebSocketConfig` alone — `enableStompBrokerRelay`,
+>   reactor-netty on the classpath, and `setUserDestinationBroadcast` /
+>   `setUserRegistryBroadcast` so a user destination reaches sessions on another instance.
+> - **Not built yet:** the board, issue and workspace topics below. They will need a per-topic
+>   access check in the interceptor (the §6 rule for `/topic/project/{id}`) before they are opened.
+>
+> **Email outbox (V24),** instead of the RabbitMQ email queue under "RabbitMQ Additional Uses":
+> notification emails are written to `email_outbox` by `Notifier` and sent by
+> `EmailOutboxDispatcher`, which `EmailOutboxPoller` runs every `simplira.email.outbox.poll-interval`
+> (10 s). A poller claims rows with one `UPDATE … FOR UPDATE SKIP LOCKED … RETURNING`, holding
+> them for 5 minutes, so two instances never send the same email and a crash mid-send means a
+> retry, not a loss. Failures back off 1, 2, 4, 8 minutes; the fifth gives up and keeps the row
+> with `failed_at` for someone to look at. A sent row is deleted. It needs no broker and survives a
+> restart. **Invitation and password-reset emails stay direct**: they carry raw tokens, and a
+> queue table would store in plain text what the database otherwise keeps only as a hash.
+
 ### Protocol
 
 STOMP over WebSocket, relayed through RabbitMQ.
@@ -1553,7 +1586,9 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V19__create_issue_labels.sql               -- composite PK; indexed by label too
 ├── V20__create_issue_links.sql                -- one link per type per pair, either direction
 ├── V21__create_notifications.sql              -- indexed for the bell, unread count and purge
-└── V22__create_notification_preferences.sql   -- overrides only; no row means both channels on
+├── V22__create_notification_preferences.sql   -- overrides only; no row means both channels on
+├── V23__rename_issue_link_check_constraints.sql -- chk_ → ck_, matching the rest of the schema
+└── V24__create_email_outbox.sql               -- notification emails, sent by a poller with retries
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -2920,8 +2955,13 @@ Columns         snake_case:               created_at, is_blocked, sprint_id
 Foreign keys    {table}_id:               sprint_id, reporter_id
 Enum values     UPPER_SNAKE_CASE:         IN_PROGRESS, TEAM_LEADER
 Indexes         idx_{table}_{column}:     idx_issue_project_id
-Constraints     chk_{table}_{rule}:       chk_issue_link_no_self_link
+Checks          ck_{table}_{rule}:        ck_issue_links_no_self_link
+Unique          uq_{table}_{rule}:        uq_issues_number (a partial unique index too)
 ```
+
+> **As built:** CHECK constraints are `ck_`, as every migration from V4 on wrote them. This table
+> said `chk_` until V20 followed it; V23 renamed V20's two to match. Tables are plural in practice
+> (`issues`, `issue_assignees`) despite the examples above.
 
 ### Java / Spring Boot
 
@@ -3769,6 +3809,8 @@ e.g. attachments/issue-uuid/abc123_screenshot.png
 > the application class, and `infrastructure/scheduling/ScheduledJobs` calls
 > `NotificationService.purgeExpired()` instead of a repository directly. Only the notification
 > purge exists so far; the refresh-token purge and invitation expiry below are still to add.
+> The email outbox poller (§8) is a separate `EmailOutboxPoller`, so tests can switch it off
+> with `simplira.email.outbox.polling=false` and send queued email themselves.
 
 ### Setup
 
