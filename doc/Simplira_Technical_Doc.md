@@ -514,6 +514,16 @@ UNIQUE (comment_id, mentioned_user_id)
 ```
 
 > Parsed from @username syntax on comment save.
+>
+> **As built:** not `@username` — users have no username column, full names are not unique, and
+> email addresses in comment text are unwieldy personal data. A mention is the token the editor
+> inserts when someone is picked from the member search (§26): `@[Jane Doe](user-uuid)`. The id
+> is what counts and survives renames; the name only keeps the raw text readable. A bare `@Jane`
+> is just text.
+>
+> A mention of someone who cannot see the project is dropped while the text is kept, so nobody is
+> pointed at work they cannot open — the assignee rule, for the same reason. Edits re-read the
+> mentions, so one removed from the text disappears with it.
 > Stored separately for efficient mention queries without scanning comment text.
 
 ### Label
@@ -987,7 +997,7 @@ DELETE /api/v1/issues/{issueId}/labels/{labelId}                    👤 Remove 
 GET    /api/v1/issues/{issueId}/comments                            👤 List comments
 POST   /api/v1/issues/{issueId}/comments                            👤 Create comment
 PATCH  /api/v1/comments/{commentId}                                 👤 Update own comment
-DELETE /api/v1/comments/{commentId}                                 👤 Delete own (soft)
+DELETE /api/v1/comments/{commentId}                                 👤 Delete own, or any as workspace ADMIN (soft)
 ```
 
 ### Attachment Endpoints
@@ -1416,7 +1426,7 @@ shared/
 │   ├── ProjectKeyGenerator.java
 │   ├── SlugGenerator.java
 │   ├── TokenGenerator.java
-│   └── MentionParser.java                ← parses @username from comments
+│   └── MentionParser.java                ← parses @[Name](user-id) tokens from comments
 └── constant/
     ├── SimpliraConstants.java
     └── SecurityConstants.java
@@ -1441,7 +1451,9 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V12__create_default_issue_statuses.sql     -- template rows (§33)
 ├── V13__create_issue_statuses.sql             -- per project, positions unique per board
 ├── V14__create_issues.sql                     -- status_id, number, float positions, version
-└── V15__create_issue_assignees.sql            -- unique per (issue, user); indexed by user too
+├── V15__create_issue_assignees.sql            -- unique per (issue, user); indexed by user too
+├── V16__create_comments.sql                   -- soft delete
+└── V17__create_comment_mentions.sql           -- unique per (comment, user); indexed by user
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1452,8 +1464,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
     create_labels.sql
     create_issue_links.sql
     create_issue_labels.sql
-    create_comments.sql
-    create_comment_mentions.sql
     create_attachments.sql
     create_notifications.sql
     create_notification_preferences.sql
@@ -4517,6 +4527,12 @@ fit for hexagonal and is the project standard.
 > mapper *and* the decision in the adapter, never the flag alone. The database
 > `DEFAULT gen_random_uuid()` remains in the DDL as a harmless fallback that will not normally
 > fire.
+
+> **And never hardcode `isNew()` to `true`**, even for insert-only rows. Spring Data's `delete()`
+> silently does nothing to an entity that reports itself new, so a row loaded from the database
+> must answer `false` or it can never be removed. Comment mentions hit exactly this: they are
+> created and deleted but never updated, `isNew()` returned `true` unconditionally, and removing a
+> mention in an edit left the row behind with no error at all.
 
 ---
 
