@@ -42,6 +42,7 @@ public class IssueService {
     private final SprintRepository sprintRepository;
     private final ProjectAuthorization projectAuthorization;
     private final BlockedFlagSync blockedFlagSync;
+    private final Notifier notifier;
 
     public IssueService(IssueRepository issueRepository,
                         IssueTypeRepository issueTypeRepository,
@@ -49,7 +50,8 @@ public class IssueService {
                         ProjectRepository projectRepository,
                         SprintRepository sprintRepository,
                         ProjectAuthorization projectAuthorization,
-                        BlockedFlagSync blockedFlagSync) {
+                        BlockedFlagSync blockedFlagSync,
+                        Notifier notifier) {
         this.issueRepository = issueRepository;
         this.issueTypeRepository = issueTypeRepository;
         this.issueStatusRepository = issueStatusRepository;
@@ -57,6 +59,7 @@ public class IssueService {
         this.sprintRepository = sprintRepository;
         this.projectAuthorization = projectAuthorization;
         this.blockedFlagSync = blockedFlagSync;
+        this.notifier = notifier;
     }
 
     public Issue create(UUID projectId,
@@ -175,13 +178,20 @@ public class IssueService {
         if (dueDate != null) {
             issue.changeDueDate(dueDate);
         }
+        boolean wasClosed = issue.getClosedAt() != null;
+        IssueStatus newStatus = null;
         if (statusId != null && !statusId.equals(issue.getStatusId())) {
-            IssueStatus status = resolveStatus(issue.getProjectId(), statusId);
+            newStatus = resolveStatus(issue.getProjectId(), statusId);
             // Closing is derived from the status category, so a project that renames "Done" to
             // "Shipped" still closes issues correctly.
-            issue.changeStatus(status.getId(), status.getCategory() == IssueStatusCategory.DONE, actorId);
+            issue.changeStatus(newStatus.getId(), newStatus.getCategory() == IssueStatusCategory.DONE, actorId);
         }
-        return issueRepository.save(issue);
+        Issue saved = issueRepository.save(issue);
+
+        if (newStatus != null) {
+            notifier.statusChanged(saved, newStatus, !wasClosed && saved.getClosedAt() != null, actorId);
+        }
+        return saved;
     }
 
     public void delete(UUID issueId, UUID actorId) {
@@ -206,8 +216,14 @@ public class IssueService {
     public Issue block(UUID issueId, String reason, UUID actorId) {
         Issue issue = loadIssue(issueId);
         projectAuthorization.requireAccess(issue.getProjectId(), actorId);
+        // Re-blocking with a new reason edits the reason; only the move into blocked is news.
+        boolean wasBlocked = issue.isBlocked();
         issue.block(reason);
-        return issueRepository.save(issue);
+        Issue saved = issueRepository.save(issue);
+        if (!wasBlocked) {
+            notifier.issueBlocked(saved, reason, actorId);
+        }
+        return saved;
     }
 
     public Issue unblock(UUID issueId, UUID actorId) {

@@ -26,15 +26,18 @@ public class IssueLinkService {
     private final IssueRepository issueRepository;
     private final ProjectAuthorization projectAuthorization;
     private final BlockedFlagSync blockedFlagSync;
+    private final Notifier notifier;
 
     public IssueLinkService(IssueLinkRepository issueLinkRepository,
                             IssueRepository issueRepository,
                             ProjectAuthorization projectAuthorization,
-                            BlockedFlagSync blockedFlagSync) {
+                            BlockedFlagSync blockedFlagSync,
+                            Notifier notifier) {
         this.issueLinkRepository = issueLinkRepository;
         this.issueRepository = issueRepository;
         this.projectAuthorization = projectAuthorization;
         this.blockedFlagSync = blockedFlagSync;
+        this.notifier = notifier;
     }
 
     // From both ends: an issue lists the links it made and the ones made to it.
@@ -69,8 +72,11 @@ public class IssueLinkService {
             throw new IssueLinkAlreadyExistsException();
         }
         IssueLink link = issueLinkRepository.save(IssueLink.create(sourceIssueId, targetIssueId, type, actorId));
-        if (link.blocks()) {
-            blockedFlagSync.refresh(targetIssueId);
+        // A link that blocks its target is told as the block, the thing that changes their day.
+        if (link.blocks() && blockedFlagSync.refresh(targetIssueId)) {
+            notifier.issueBlockedByLink(target, source, actorId);
+        } else {
+            notifier.issueLinked(source, target, type, actorId);
         }
         return new IssueLinkView(link, target);
     }

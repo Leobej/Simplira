@@ -5,12 +5,15 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 // The raw invitation token exists only in the email, by design - so a test that accepts an
-// invitation has to read it from the sender.
+// invitation has to read it from the sender. Notification subjects are kept so the email channel
+// can be checked separately from the in-app one.
 @TestConfiguration
 public class RecordingEmailConfig {
 
@@ -23,9 +26,14 @@ public class RecordingEmailConfig {
     public static class RecordingEmailService implements EmailService {
 
         private final Map<String, String> invitationTokens = new ConcurrentHashMap<>();
+        private final Map<String, List<String>> notificationSubjects = new ConcurrentHashMap<>();
 
         public String invitationTokenFor(String email) {
             return invitationTokens.get(email.toLowerCase(Locale.ROOT));
+        }
+
+        public List<String> notificationSubjectsFor(String email) {
+            return notificationSubjects.getOrDefault(email.toLowerCase(Locale.ROOT), List.of());
         }
 
         @Override
@@ -40,7 +48,8 @@ public class RecordingEmailConfig {
 
         @Override
         public void sendNotification(String to, String subject, String body) {
-            // nothing to record yet
+            notificationSubjects.computeIfAbsent(to.toLowerCase(Locale.ROOT), key -> new CopyOnWriteArrayList<>())
+                    .add(subject);
         }
     }
 }

@@ -30,15 +30,18 @@ public class CommentService {
     private final IssueRepository issueRepository;
     private final UserRepository userRepository;
     private final ProjectAuthorization projectAuthorization;
+    private final Notifier notifier;
 
     public CommentService(CommentRepository commentRepository,
                           IssueRepository issueRepository,
                           UserRepository userRepository,
-                          ProjectAuthorization projectAuthorization) {
+                          ProjectAuthorization projectAuthorization,
+                          Notifier notifier) {
         this.commentRepository = commentRepository;
         this.issueRepository = issueRepository;
         this.userRepository = userRepository;
         this.projectAuthorization = projectAuthorization;
+        this.notifier = notifier;
     }
 
     public List<CommentView> list(UUID issueId, UUID actorId) {
@@ -52,7 +55,9 @@ public class CommentService {
         requireAccess(issue, actorId, () -> new IssueNotFoundException(issueId));
 
         Comment comment = Comment.write(issueId, actorId, content, validMentions(issue.getProjectId(), content));
-        return views(List.of(commentRepository.save(comment))).get(0);
+        Comment saved = commentRepository.save(comment);
+        notifier.commentAdded(issue, saved, actorId);
+        return views(List.of(saved)).get(0);
     }
 
     // Nobody can put words in someone else's mouth, admins included.
@@ -64,8 +69,11 @@ public class CommentService {
         if (!comment.isWrittenBy(actorId)) {
             throw new ForbiddenException("Only the author can edit a comment");
         }
+        Set<UUID> previouslyMentioned = Set.copyOf(comment.getMentionedUserIds());
         comment.edit(content, validMentions(issue.getProjectId(), content));
-        return views(List.of(commentRepository.save(comment))).get(0);
+        Comment saved = commentRepository.save(comment);
+        notifier.commentEdited(issue, saved, previouslyMentioned, actorId);
+        return views(List.of(saved)).get(0);
     }
 
     // The author, or a workspace admin removing something that should not be there. §7 says

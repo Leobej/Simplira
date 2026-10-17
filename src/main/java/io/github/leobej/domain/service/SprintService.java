@@ -27,15 +27,18 @@ public class SprintService {
     private final IssueRepository issueRepository;
     private final IssueStatusRepository issueStatusRepository;
     private final ProjectAuthorization projectAuthorization;
+    private final Notifier notifier;
 
     public SprintService(SprintRepository sprintRepository,
                          IssueRepository issueRepository,
                          IssueStatusRepository issueStatusRepository,
-                         ProjectAuthorization projectAuthorization) {
+                         ProjectAuthorization projectAuthorization,
+                         Notifier notifier) {
         this.sprintRepository = sprintRepository;
         this.issueRepository = issueRepository;
         this.issueStatusRepository = issueStatusRepository;
         this.projectAuthorization = projectAuthorization;
+        this.notifier = notifier;
     }
 
     public Sprint create(UUID projectId, String name, LocalDate startDate, LocalDate endDate, UUID actorId) {
@@ -87,7 +90,9 @@ public class SprintService {
             throw new SprintAlreadyActiveException();
         }
         sprint.start();
-        return sprintRepository.save(sprint);
+        Sprint saved = sprintRepository.save(sprint);
+        notifier.sprintStarted(saved, issueIdsIn(sprintId), actorId);
+        return saved;
     }
 
     // §29: closing a sprint has to decide what happens to work that did not finish. Nothing is
@@ -108,9 +113,18 @@ public class SprintService {
             }
         }
 
+        // Taken before the carry-over: whoever had work in the sprint hears it closed, including
+        // the people whose unfinished issues are about to leave it.
+        List<UUID> issueIds = issueIdsIn(sprintId);
         moveIncompleteIssues(sprint, target);
         sprint.close();
-        return sprintRepository.save(sprint);
+        Sprint saved = sprintRepository.save(sprint);
+        notifier.sprintClosed(saved, issueIds, actorId);
+        return saved;
+    }
+
+    private List<UUID> issueIdsIn(UUID sprintId) {
+        return issueRepository.findBySprintId(sprintId).stream().map(Issue::getId).toList();
     }
 
     // "Incomplete" is defined by the status category, never by the name, so a project that calls

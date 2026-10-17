@@ -14,6 +14,8 @@ import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
 import io.github.leobej.domain.repository.LabelRepository;
+import io.github.leobej.domain.repository.NotificationPreferenceRepository;
+import io.github.leobej.domain.repository.NotificationRepository;
 import io.github.leobej.domain.repository.ProjectMemberRepository;
 import io.github.leobej.domain.repository.ProjectRepository;
 import io.github.leobej.domain.repository.SprintRepository;
@@ -31,6 +33,8 @@ import io.github.leobej.domain.service.IssueService;
 import io.github.leobej.domain.service.IssueStatusService;
 import io.github.leobej.domain.service.IssueTypeService;
 import io.github.leobej.domain.service.LabelService;
+import io.github.leobej.domain.service.NotificationService;
+import io.github.leobej.domain.service.Notifier;
 import io.github.leobej.domain.service.ProjectAuthorization;
 import io.github.leobej.domain.service.ProjectSetupService;
 import io.github.leobej.domain.service.ProjectService;
@@ -106,13 +110,37 @@ public class DomainServiceConfig {
                 assignmentRevoker);
     }
 
+    // Every service that changes something people care about tells them through this.
+    @Bean
+    public Notifier notifier(NotificationRepository notificationRepository,
+                             NotificationPreferenceRepository notificationPreferenceRepository,
+                             UserRepository userRepository,
+                             ProjectRepository projectRepository,
+                             IssueAssigneeRepository issueAssigneeRepository,
+                             ProjectAuthorization projectAuthorization,
+                             EmailService emailService,
+                             @Value("${simplira.notifications.expiry-days}") long expiryDays) {
+        return new Notifier(notificationRepository, notificationPreferenceRepository, userRepository,
+                projectRepository, issueAssigneeRepository, projectAuthorization, emailService,
+                Duration.ofDays(expiryDays));
+    }
+
+    @Bean
+    public NotificationService notificationService(NotificationRepository notificationRepository,
+                                                   NotificationPreferenceRepository notificationPreferenceRepository,
+                                                   WorkspaceAuthorization workspaceAuthorization) {
+        return new NotificationService(notificationRepository, notificationPreferenceRepository,
+                workspaceAuthorization);
+    }
+
     @Bean
     public SprintService sprintService(SprintRepository sprintRepository,
                                        IssueRepository issueRepository,
                                        IssueStatusRepository issueStatusRepository,
-                                       ProjectAuthorization projectAuthorization) {
+                                       ProjectAuthorization projectAuthorization,
+                                       Notifier notifier) {
         return new SprintService(sprintRepository, issueRepository, issueStatusRepository,
-                projectAuthorization);
+                projectAuthorization, notifier);
     }
 
     @Bean
@@ -151,27 +179,30 @@ public class DomainServiceConfig {
                                      ProjectRepository projectRepository,
                                      SprintRepository sprintRepository,
                                      ProjectAuthorization projectAuthorization,
-                                     BlockedFlagSync blockedFlagSync) {
+                                     BlockedFlagSync blockedFlagSync,
+                                     Notifier notifier) {
         return new IssueService(issueRepository, issueTypeRepository, issueStatusRepository,
-                projectRepository, sprintRepository, projectAuthorization, blockedFlagSync);
+                projectRepository, sprintRepository, projectAuthorization, blockedFlagSync, notifier);
     }
 
     @Bean
     public IssueLinkService issueLinkService(IssueLinkRepository issueLinkRepository,
                                              IssueRepository issueRepository,
                                              ProjectAuthorization projectAuthorization,
-                                             BlockedFlagSync blockedFlagSync) {
+                                             BlockedFlagSync blockedFlagSync,
+                                             Notifier notifier) {
         return new IssueLinkService(issueLinkRepository, issueRepository, projectAuthorization,
-                blockedFlagSync);
+                blockedFlagSync, notifier);
     }
 
     @Bean
     public IssueAssigneeService issueAssigneeService(IssueAssigneeRepository issueAssigneeRepository,
                                                      IssueRepository issueRepository,
                                                      UserRepository userRepository,
-                                                     ProjectAuthorization projectAuthorization) {
+                                                     ProjectAuthorization projectAuthorization,
+                                                     Notifier notifier) {
         return new IssueAssigneeService(issueAssigneeRepository, issueRepository, userRepository,
-                projectAuthorization);
+                projectAuthorization, notifier);
     }
 
     @Bean
@@ -184,8 +215,10 @@ public class DomainServiceConfig {
     public CommentService commentService(CommentRepository commentRepository,
                                          IssueRepository issueRepository,
                                          UserRepository userRepository,
-                                         ProjectAuthorization projectAuthorization) {
-        return new CommentService(commentRepository, issueRepository, userRepository, projectAuthorization);
+                                         ProjectAuthorization projectAuthorization,
+                                         Notifier notifier) {
+        return new CommentService(commentRepository, issueRepository, userRepository, projectAuthorization,
+                notifier);
     }
 
     @Bean

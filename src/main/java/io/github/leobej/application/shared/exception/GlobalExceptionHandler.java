@@ -11,6 +11,7 @@ import io.github.leobej.shared.exception.DuplicateNameException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
 import io.github.leobej.shared.exception.IssueLinkNotFoundException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
+import io.github.leobej.shared.exception.NotificationNotFoundException;
 import io.github.leobej.shared.exception.IssueTypeNotFoundException;
 import io.github.leobej.shared.exception.IssueVersionConflictException;
 import io.github.leobej.shared.exception.DuplicateInvitationException;
@@ -222,5 +223,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Void> handleIssueLinkNotFound(IssueLinkNotFoundException ex) {
         return ApiResponse.failure(ErrorResponse.of("ISSUE_LINK_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(NotificationNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleNotificationNotFound(NotificationNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("NOTIFICATION_NOT_FOUND", ex.getMessage()));
     }
 }

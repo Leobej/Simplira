@@ -29,4 +29,13 @@ public final class MentionParser {
         }
         return ids;
     }
+
+    // The text as a reader would see it, "@Dev" rather than the token - for places that show a
+    // comment without an editor to render it, such as a notification or an email.
+    public static String plainText(String content) {
+        if (content == null) {
+            return null;
+        }
+        return MENTION.matcher(content).replaceAll(match -> Matcher.quoteReplacement("@" + match.group(1)));
+    }
 }

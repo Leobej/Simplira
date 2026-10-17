@@ -27,13 +27,13 @@ public class BlockedFlagSync {
     }
 
     // Saves only when the flag moves: a second blocker changes nothing, and bumping the version
-    // regardless would 409 whoever is mid-edit on the issue for no visible reason.
-    public void refresh(UUID issueId) {
-        issueRepository.findById(issueId).ifPresent(issue -> {
-            if (issue.applyLinkBlocking(blockedByLinks(issueId))) {
-                issueRepository.save(issue);
-            }
-        });
+    // regardless would 409 whoever is mid-edit on the issue for no visible reason. Returns whether
+    // it moved, which is what decides if anyone is told.
+    public boolean refresh(UUID issueId) {
+        return issueRepository.findById(issueId)
+                .filter(issue -> issue.applyLinkBlocking(blockedByLinks(issueId)))
+                .map(issueRepository::save)
+                .isPresent();
     }
 
     // A deleted issue blocks nothing: its links go, and whatever it was blocking is re-checked.

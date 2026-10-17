@@ -29,15 +29,18 @@ public class IssueAssigneeService {
     private final IssueRepository issueRepository;
     private final UserRepository userRepository;
     private final ProjectAuthorization projectAuthorization;
+    private final Notifier notifier;
 
     public IssueAssigneeService(IssueAssigneeRepository assigneeRepository,
                                 IssueRepository issueRepository,
                                 UserRepository userRepository,
-                                ProjectAuthorization projectAuthorization) {
+                                ProjectAuthorization projectAuthorization,
+                                Notifier notifier) {
         this.assigneeRepository = assigneeRepository;
         this.issueRepository = issueRepository;
         this.userRepository = userRepository;
         this.projectAuthorization = projectAuthorization;
+        this.notifier = notifier;
     }
 
     public List<IssueAssigneeView> list(UUID issueId, UUID actorId) {
@@ -51,14 +54,23 @@ public class IssueAssigneeService {
         Issue issue = requireVisibleIssue(issueId, actorId);
         requireCanSeeProject(issue.getProjectId(), userId);
 
+        // Only a new assignment is news; a repeat is silent as well as harmless.
+        boolean alreadyAssigned = assigneeRepository.isAssigned(issueId, userId);
         assigneeRepository.assign(IssueAssignee.assign(issueId, userId, actorId));
+        if (!alreadyAssigned) {
+            notifier.issueAssigned(issue, userId, actorId);
+        }
         return views(issueId);
     }
 
     // Idempotent for the same reason: removing someone who is not assigned leaves it unassigned.
     public void unassign(UUID issueId, UUID userId, UUID actorId) {
-        requireVisibleIssue(issueId, actorId);
+        Issue issue = requireVisibleIssue(issueId, actorId);
+        boolean wasAssigned = assigneeRepository.isAssigned(issueId, userId);
         assigneeRepository.unassign(issueId, userId);
+        if (wasAssigned) {
+            notifier.issueUnassigned(issue, userId, actorId);
+        }
     }
 
     // Adds rather than replaces, so it can never silently strip someone else off an issue.
@@ -69,26 +81,28 @@ public class IssueAssigneeService {
         // Every id is checked before anything is written. There is no transaction around a domain
         // service, so validating as we go could leave half the batch assigned when the tenth id
         // turns out to belong to another project.
-        List<UUID> distinct = new ArrayList<>(new LinkedHashSet<>(issueIds));
-        for (UUID issueId : distinct) {
+        List<Issue> issues = new ArrayList<>();
+        for (UUID issueId : new LinkedHashSet<>(issueIds)) {
             Issue issue = issueRepository.findById(issueId)
                     .orElseThrow(() -> new IssueNotFoundException(issueId));
             if (!issue.getProjectId().equals(projectId)) {
                 throw new IssueNotFoundException(issueId);
             }
+            issues.add(issue);
         }
 
         int assigned = 0;
         int alreadyAssigned = 0;
-        for (UUID issueId : distinct) {
-            if (assigneeRepository.isAssigned(issueId, userId)) {
+        for (Issue issue : issues) {
+            if (assigneeRepository.isAssigned(issue.getId(), userId)) {
                 alreadyAssigned++;
             } else {
-                assigneeRepository.assign(IssueAssignee.assign(issueId, userId, actorId));
+                assigneeRepository.assign(IssueAssignee.assign(issue.getId(), userId, actorId));
+                notifier.issueAssigned(issue, userId, actorId);
                 assigned++;
             }
         }
-        return new BulkAssignResult(distinct.size(), assigned, alreadyAssigned);
+        return new BulkAssignResult(issues.size(), assigned, alreadyAssigned);
     }
 
     // For rendering cards: one query for a whole page of issues.
