@@ -12,6 +12,7 @@ import io.github.leobej.domain.repository.IssueAssigneeRepository;
 import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
+import io.github.leobej.domain.repository.LabelRepository;
 import io.github.leobej.domain.repository.ProjectMemberRepository;
 import io.github.leobej.domain.repository.ProjectRepository;
 import io.github.leobej.domain.repository.SprintRepository;
@@ -26,6 +27,7 @@ import io.github.leobej.domain.service.IssueAssigneeService;
 import io.github.leobej.domain.service.IssueService;
 import io.github.leobej.domain.service.IssueStatusService;
 import io.github.leobej.domain.service.IssueTypeService;
+import io.github.leobej.domain.service.LabelService;
 import io.github.leobej.domain.service.ProjectAuthorization;
 import io.github.leobej.domain.service.ProjectSetupService;
 import io.github.leobej.domain.service.ProjectService;
@@ -165,5 +167,12 @@ public class DomainServiceConfig {
                                          UserRepository userRepository,
                                          ProjectAuthorization projectAuthorization) {
         return new CommentService(commentRepository, issueRepository, userRepository, projectAuthorization);
+    }
+
+    @Bean
+    public LabelService labelService(LabelRepository labelRepository,
+                                     IssueRepository issueRepository,
+                                     ProjectAuthorization projectAuthorization) {
+        return new LabelService(labelRepository, issueRepository, projectAuthorization);
     }
 }

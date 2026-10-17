@@ -8,6 +8,7 @@ import io.github.leobej.infrastructure.persistence.postgres.entity.IssueEntity;
 import io.github.leobej.infrastructure.persistence.postgres.jpa.JpaIssueRepository;
 import io.github.leobej.infrastructure.persistence.postgres.mapper.IssueEntityMapper;
 import io.github.leobej.infrastructure.persistence.postgres.entity.IssueAssigneeEntity;
+import io.github.leobej.infrastructure.persistence.postgres.entity.IssueLabelEntity;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
@@ -93,6 +94,16 @@ public class IssueRepositoryAdapter implements IssueRepository {
                 anyone.select(assignee.get("issueId"))
                         .where(builder.equal(assignee.get("issueId"), root.get("id")));
                 predicates.add(builder.not(builder.exists(anyone)));
+            }
+            if (filter.labelIds() != null) {
+                // One subquery per label, so an issue has to carry all of them.
+                for (UUID labelId : filter.labelIds()) {
+                    Subquery<UUID> labelled = query.subquery(UUID.class);
+                    Root<IssueLabelEntity> issueLabel = labelled.from(IssueLabelEntity.class);
+                    labelled.select(issueLabel.get("issueId"))
+                            .where(builder.equal(issueLabel.get("labelId"), labelId));
+                    predicates.add(root.get("id").in(labelled));
+                }
             }
             if (filter.blocked() != null) {
                 predicates.add(builder.equal(root.get("blocked"), filter.blocked()));

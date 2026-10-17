@@ -16,6 +16,7 @@ import io.github.leobej.domain.model.issue.IssueStatusCategory;
 import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.service.IssueAssigneeService;
 import io.github.leobej.domain.service.IssueService;
+import io.github.leobej.domain.service.LabelService;
 import io.github.leobej.infrastructure.security.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -35,10 +36,14 @@ public class IssueController {
 
     private final IssueService issueService;
     private final IssueAssigneeService issueAssigneeService;
+    private final LabelService labelService;
 
-    public IssueController(IssueService issueService, IssueAssigneeService issueAssigneeService) {
+    public IssueController(IssueService issueService,
+                           IssueAssigneeService issueAssigneeService,
+                           LabelService labelService) {
         this.issueService = issueService;
         this.issueAssigneeService = issueAssigneeService;
+        this.labelService = labelService;
     }
 
     @GetMapping("/projects/{projectId}/issues")
@@ -162,12 +167,16 @@ public class IssueController {
                 new PageMeta(result.page(), result.pageSize(), result.total()));
     }
 
-    // Assignees for the whole batch in one query, so a board of fifty cards is not fifty queries.
+    // Assignees and labels for the whole batch in one query each, so a board of fifty cards is
+    // two queries rather than a hundred.
     private List<IssueResponse> responses(List<Issue> issues, String key) {
-        Map<UUID, List<UUID>> assignees = issueAssigneeService.assigneeIds(
-                issues.stream().map(Issue::getId).toList());
+        List<UUID> ids = issues.stream().map(Issue::getId).toList();
+        Map<UUID, List<UUID>> assignees = issueAssigneeService.assigneeIds(ids);
+        Map<UUID, List<UUID>> labels = labelService.labelIdsOf(ids);
         return issues.stream()
-                .map(issue -> IssueResponse.from(issue, key, assignees.getOrDefault(issue.getId(), List.of())))
+                .map(issue -> IssueResponse.from(issue, key,
+                        assignees.getOrDefault(issue.getId(), List.of()),
+                        labels.getOrDefault(issue.getId(), List.of())))
                 .toList();
     }
 
@@ -180,6 +189,7 @@ public class IssueController {
             UUID reporterId,
             UUID assigneeId,
             Boolean unassigned,
+            List<UUID> labelId,
             Boolean isBlocked,
             LocalDate dueBefore,
             LocalDate dueAfter,
@@ -205,7 +215,7 @@ public class IssueController {
                     : Math.min(pageSize, MAX_PAGE_SIZE);
 
             return new IssueFilter(projectId, sprintId, backlogOnly, statusIds, typeId, priority,
-                    reporterId, assigneeId, Boolean.TRUE.equals(unassigned), isBlocked, dueBefore,
+                    reporterId, assigneeId, Boolean.TRUE.equals(unassigned), labelId, isBlocked, dueBefore,
                     dueAfter, q, true, resolvedPage, resolvedSize);
         }
     }

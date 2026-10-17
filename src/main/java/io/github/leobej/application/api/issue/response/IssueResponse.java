@@ -32,11 +32,13 @@ public record IssueResponse(
         // Ids only: the client already holds the member list, so names would be duplicated
         // on every card of every page.
         List<UUID> assigneeIds,
+        List<UUID> labelIds,
         long version,
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static IssueResponse from(Issue issue, String projectKey, List<UUID> assigneeIds) {
+    public static IssueResponse from(Issue issue, String projectKey, List<UUID> assigneeIds,
+                                     List<UUID> labelIds) {
         return new IssueResponse(
                 issue.getId(),
                 issue.getProjectId(),
@@ -58,6 +60,7 @@ public record IssueResponse(
                 issue.getBacklogPosition(),
                 issue.getSprintPosition(),
                 assigneeIds == null ? List.of() : assigneeIds,
+                labelIds == null ? List.of() : labelIds,
                 issue.getVersion(),
                 issue.getCreatedAt(),
                 issue.getUpdatedAt()

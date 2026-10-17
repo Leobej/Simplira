@@ -16,6 +16,7 @@ public record IssueFilter(
         UUID reporterId,
         UUID assigneeId,
         boolean unassignedOnly,
+        List<UUID> labelIds,   // repeatable; an issue must carry every one (§34)
         Boolean blocked,
         LocalDate dueBefore,
         LocalDate dueAfter,

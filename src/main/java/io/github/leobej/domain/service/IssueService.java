@@ -132,7 +132,7 @@ public class IssueService {
         return issueRepository.search(new IssueFilter(
                 sprint.getProjectId(), sprintId, false, statusIds, template.typeId(),
                 template.priority(), template.reporterId(), template.assigneeId(),
-                template.unassignedOnly(), template.blocked(), template.dueBefore(),
+                template.unassignedOnly(), template.labelIds(), template.blocked(), template.dueBefore(),
                 template.dueAfter(), template.text(), template.topLevelOnly(),
                 template.page(), template.pageSize()));
     }

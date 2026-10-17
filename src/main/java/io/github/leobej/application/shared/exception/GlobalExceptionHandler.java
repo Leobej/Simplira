@@ -16,6 +16,7 @@ import io.github.leobej.shared.exception.DuplicateInvitationException;
 import io.github.leobej.shared.exception.ForbiddenException;
 import io.github.leobej.shared.exception.InvitationNotFoundException;
 import io.github.leobej.shared.exception.InvalidProjectKeyException;
+import io.github.leobej.shared.exception.LabelNotFoundException;
 import io.github.leobej.shared.exception.InvitationNotUsableException;
 import io.github.leobej.shared.exception.ProjectKeyAlreadyExistsException;
 import io.github.leobej.shared.exception.ProjectMemberNotFoundException;
@@ -208,5 +209,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Void> handleCommentNotFound(CommentNotFoundException ex) {
         return ApiResponse.failure(ErrorResponse.of("COMMENT_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(LabelNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleLabelNotFound(LabelNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("LABEL_NOT_FOUND", ex.getMessage()));
     }
 }
