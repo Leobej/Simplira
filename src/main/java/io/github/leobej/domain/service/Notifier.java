@@ -9,10 +9,12 @@ import io.github.leobej.domain.model.notification.Notification;
 import io.github.leobej.domain.model.notification.NotificationAction;
 import io.github.leobej.domain.model.notification.NotificationEntityType;
 import io.github.leobej.domain.model.notification.NotificationPreference;
+import io.github.leobej.domain.model.notification.OutboundEmail;
 import io.github.leobej.domain.model.project.Project;
 import io.github.leobej.domain.model.sprint.Sprint;
 import io.github.leobej.domain.model.user.User;
-import io.github.leobej.domain.port.EmailService;
+import io.github.leobej.domain.port.NotificationPublisher;
+import io.github.leobej.domain.repository.EmailOutboxRepository;
 import io.github.leobej.domain.repository.IssueAssigneeRepository;
 import io.github.leobej.domain.repository.NotificationPreferenceRepository;
 import io.github.leobej.domain.repository.NotificationRepository;
@@ -22,7 +24,6 @@ import io.github.leobej.shared.exception.ProjectNotFoundException;
 import io.github.leobej.shared.util.MentionParser;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,7 +51,8 @@ public class Notifier {
     private final ProjectRepository projectRepository;
     private final IssueAssigneeRepository assigneeRepository;
     private final ProjectAuthorization projectAuthorization;
-    private final EmailService emailService;
+    private final EmailOutboxRepository emailOutboxRepository;
+    private final NotificationPublisher notificationPublisher;
     private final Duration retention;
 
     public Notifier(NotificationRepository notificationRepository,
@@ -59,7 +61,8 @@ public class Notifier {
                     ProjectRepository projectRepository,
                     IssueAssigneeRepository assigneeRepository,
                     ProjectAuthorization projectAuthorization,
-                    EmailService emailService,
+                    EmailOutboxRepository emailOutboxRepository,
+                    NotificationPublisher notificationPublisher,
                     Duration retention) {
         this.notificationRepository = notificationRepository;
         this.preferenceRepository = preferenceRepository;
@@ -67,7 +70,8 @@ public class Notifier {
         this.projectRepository = projectRepository;
         this.assigneeRepository = assigneeRepository;
         this.projectAuthorization = projectAuthorization;
-        this.emailService = emailService;
+        this.emailOutboxRepository = emailOutboxRepository;
+        this.notificationPublisher = notificationPublisher;
         this.retention = retention;
     }
 
@@ -198,20 +202,18 @@ public class Notifier {
                 .findForAction(project.getWorkspaceId(), action, recipients).stream()
                 .collect(Collectors.toMap(NotificationPreference::userId, Function.identity()));
 
-        List<UUID> byEmail = new ArrayList<>();
         for (UUID recipient : recipients) {
             NotificationPreference preference = stored.getOrDefault(recipient,
                     NotificationPreference.defaults(recipient, project.getWorkspaceId(), action));
             if (preference.inApp()) {
-                notificationRepository.save(Notification.create(project.getWorkspaceId(), recipient, actorId,
-                        entityType, entityId, action, title, body, retention));
+                Notification saved = notificationRepository.save(Notification.create(project.getWorkspaceId(),
+                        recipient, actorId, entityType, entityId, action, title, body, retention));
+                notificationPublisher.publish(saved);
             }
+            // Queued, not sent: the mail provider is EmailOutboxDispatcher's problem, off the request.
             if (preference.email()) {
-                byEmail.add(recipient);
+                emailOutboxRepository.enqueue(OutboundEmail.to(recipient, title, body));
             }
-        }
-        for (User user : userRepository.findAllById(byEmail)) {
-            emailService.sendNotification(user.getEmail(), title, body == null ? "" : body);
         }
     }
 

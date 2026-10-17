@@ -8,6 +8,7 @@ import io.github.leobej.domain.model.workspace.UserWorkspace;
 import io.github.leobej.domain.model.workspace.WorkspaceRole;
 import io.github.leobej.domain.repository.NotificationRepository;
 import io.github.leobej.domain.repository.UserWorkspaceRepository;
+import io.github.leobej.domain.service.EmailOutboxDispatcher;
 import io.github.leobej.domain.service.NotificationService;
 import io.github.leobej.support.PostgresTestBase;
 import io.github.leobej.support.RecordingEmailConfig;
@@ -53,6 +54,9 @@ class NotificationFlowTest extends PostgresTestBase {
     @Autowired
     private RecordingEmailService emails;
 
+    @Autowired
+    private EmailOutboxDispatcher emailOutboxDispatcher;
+
     @Test
     void assigningSomeoneTellsThemOnceAndNeverTheAssigner() throws Exception {
         Team team = newTeam();
@@ -72,7 +76,9 @@ class NotificationFlowTest extends PostgresTestBase {
                 .andExpect(jsonPath("$.data[0].read").value(false));
         inbox(team.admin()).andExpect(jsonPath("$.meta.total").value(0));
 
-        // Both channels are on until someone says otherwise.
+        // Both channels are on until someone says otherwise - and email waits for the outbox.
+        assertThat(emails.notificationSubjectsFor(team.dev().email())).isEmpty();
+        drainOutbox();
         assertThat(emails.notificationSubjectsFor(team.dev().email())).containsExactly("Admin assigned you to NTF-1");
     }
 
@@ -159,6 +165,7 @@ class NotificationFlowTest extends PostgresTestBase {
 
         assign(team.admin(), createIssue(team, "Quietly"), team.dev().userId());
         inbox(team.dev()).andExpect(jsonPath("$.meta.total").value(0));
+        drainOutbox();
         assertThat(emails.notificationSubjectsFor(team.dev().email())).containsExactly("Admin assigned you to NTF-1");
 
         // Someone outside the workspace is told it does not exist.
@@ -249,6 +256,14 @@ class NotificationFlowTest extends PostgresTestBase {
 
         assertThat(notificationRepository.findById(expired.getId())).isEmpty();
         assertThat(notificationRepository.findById(current.getId())).isPresent();
+    }
+
+    // Email is queued, not sent, and the poller is off in tests. The outbox is shared with every
+    // other test class, so keep going until a pass sends nothing.
+    private void drainOutbox() {
+        while (emailOutboxDispatcher.dispatchDue() > 0) {
+            // next batch
+        }
     }
 
     private record Account(UUID userId, String token, String email) {}

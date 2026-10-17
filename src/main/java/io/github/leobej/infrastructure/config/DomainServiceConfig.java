@@ -4,9 +4,11 @@ import io.github.leobej.domain.port.AccessTokenIssuer;
 import io.github.leobej.domain.port.PasswordHasher;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.port.EmailService;
+import io.github.leobej.domain.port.NotificationPublisher;
 import io.github.leobej.domain.repository.CommentRepository;
 import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
 import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
+import io.github.leobej.domain.repository.EmailOutboxRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
 import io.github.leobej.domain.repository.IssueAssigneeRepository;
 import io.github.leobej.domain.repository.IssueLinkRepository;
@@ -26,6 +28,7 @@ import io.github.leobej.domain.service.AssignmentRevoker;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.BlockedFlagSync;
 import io.github.leobej.domain.service.CommentService;
+import io.github.leobej.domain.service.EmailOutboxDispatcher;
 import io.github.leobej.domain.service.InvitationService;
 import io.github.leobej.domain.service.IssueAssigneeService;
 import io.github.leobej.domain.service.IssueLinkService;
@@ -118,11 +121,19 @@ public class DomainServiceConfig {
                              ProjectRepository projectRepository,
                              IssueAssigneeRepository issueAssigneeRepository,
                              ProjectAuthorization projectAuthorization,
-                             EmailService emailService,
+                             EmailOutboxRepository emailOutboxRepository,
+                             NotificationPublisher notificationPublisher,
                              @Value("${simplira.notifications.expiry-days}") long expiryDays) {
         return new Notifier(notificationRepository, notificationPreferenceRepository, userRepository,
-                projectRepository, issueAssigneeRepository, projectAuthorization, emailService,
-                Duration.ofDays(expiryDays));
+                projectRepository, issueAssigneeRepository, projectAuthorization, emailOutboxRepository,
+                notificationPublisher, Duration.ofDays(expiryDays));
+    }
+
+    @Bean
+    public EmailOutboxDispatcher emailOutboxDispatcher(EmailOutboxRepository emailOutboxRepository,
+                                                       UserRepository userRepository,
+                                                       EmailService emailService) {
+        return new EmailOutboxDispatcher(emailOutboxRepository, userRepository, emailService);
     }
 
     @Bean

@@ -40,6 +40,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/logout").permitAll()
                         // The container HEALTHCHECK curls this with no credentials.
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                        // The WebSocket handshake: a browser cannot attach a bearer token to it, so
+                        // the token comes on the STOMP CONNECT frame (StompAuthenticationInterceptor).
+                        .requestMatchers(HttpMethod.GET, "/ws").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions ->
