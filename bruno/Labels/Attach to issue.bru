@@ -1,0 +1,32 @@
+meta {
+  name: Attach to issue
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/labels
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "labelId": "{{labelId}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Run Issues/Create issue first. Anyone who can see the issue may label it.
+
+  Answers 200 with the issue's whole label list, like assignees: attaching is idempotent, so a
+  second run changes nothing. A label from a different project is 404 LABEL_NOT_FOUND.
+}

@@ -1,0 +1,20 @@
+meta {
+  name: List issue labels
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/labels
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  The labels with names and colours. The issue itself only carries labelIds, so a board can
+  load the project's labels once and look them up.
+}

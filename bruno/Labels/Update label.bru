@@ -1,0 +1,30 @@
+meta {
+  name: Update label
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/labels/{{labelId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "color": "#C0392B"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Send name, color or both; whatever is left out stays as it is. Renaming to a name another
+  label already has is 409 NAME_ALREADY_EXISTS.
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Delete label
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/labels/{{labelId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  TEAM_LEADER or ADMIN. The label is soft-deleted, comes off every issue that wore it, and its
+  name is free to use again.
+}

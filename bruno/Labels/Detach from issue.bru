@@ -1,0 +1,19 @@
+meta {
+  name: Detach from issue
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/labels/{{labelId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Idempotent: removing a label the issue is not wearing is still 204.
+}

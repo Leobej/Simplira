@@ -76,6 +76,14 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Comments 2 | List comments | 200 — authors resolved, oldest first |
 | Comments 3 | Edit comment | 200 — author only; mentions re-read |
 | Comments 4 | Delete comment | 204 — author or workspace ADMIN |
+| Labels 1 | Create label | 201 — leads only; captures `labelId` |
+| Labels 2 | List labels | 200 — by name, deleted ones hidden |
+| Labels 3 | Update label | 200 — name, colour or both |
+| Labels 4 | Attach to issue | 200 — idempotent; the issue's full label list |
+| Labels 5 | List issue labels | 200 — names and colours |
+| Labels 6 | Filter issues by label | 200 — repeat `labelId` to require all of them |
+| Labels 7 | Detach from issue | 204 — idempotent |
+| Labels 8 | Delete label | 204 — off every issue; frees the name, so the folder re-runs |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

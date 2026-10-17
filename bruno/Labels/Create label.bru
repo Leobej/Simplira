@@ -1,0 +1,39 @@
+meta {
+  name: Create label
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/labels
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "bug",
+    "color": "#E74C3C"
+  }
+}
+
+vars:post-response {
+  labelId: res.body.data.id
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  TEAM_LEADER or ADMIN only - defining the project's labels is a lead's job, using them is
+  everyone's. color must be #RRGGBB.
+
+  Names are unique per project among labels that are not deleted: running this twice is
+  409 NAME_ALREADY_EXISTS, but after Delete label (the last request in this folder) the name is
+  free again, so the whole folder can be re-run.
+}
