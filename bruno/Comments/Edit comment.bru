@@ -1,0 +1,32 @@
+meta {
+  name: Edit comment
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/comments/{{commentId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "content": "Never mind, sorted it."
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.edited: eq true
+}
+
+docs {
+  Author only - admins included, nobody can put words in someone else's mouth.
+
+  Mentions are re-read from the new text, so the one in the original comment disappears here.
+}

@@ -72,6 +72,10 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Assignees 2 | List assignees | 200 — names and avatars, in assignment order |
 | Assignees 3 | Unassign | 204 — idempotent |
 | Assignees 4 | Bulk assign | 200 — adds, never replaces; all or nothing |
+| Comments 1 | Add comment | 201 — `@[Name](id)` mentions; captures `commentId` |
+| Comments 2 | List comments | 200 — authors resolved, oldest first |
+| Comments 3 | Edit comment | 200 — author only; mentions re-read |
+| Comments 4 | Delete comment | 204 — author or workspace ADMIN |
 
 Every request uses one fixed account, `userEmail` / `userPassword` from the **Local**
 environment (`john@example.com` / `supersecret`). Change it there and the whole collection

@@ -1,0 +1,19 @@
+meta {
+  name: Delete comment
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/comments/{{commentId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  The author, or a workspace ADMIN moderating. Soft delete - it disappears from the list.
+}

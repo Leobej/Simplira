@@ -1,0 +1,21 @@
+meta {
+  name: List comments
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/comments
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Oldest first. Each comment carries its author's name and avatar rather than just an id,
+  because comments outlive membership - someone who has left can no longer be found in the
+  member list, but their comments still need a name on them.
+}

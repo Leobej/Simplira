@@ -1,0 +1,37 @@
+meta {
+  name: Add comment
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/comments
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "content": "Reproduced on staging. @[Teammate]({{memberUserId}}) can you take a look?"
+  }
+}
+
+vars:post-response {
+  commentId: res.body.data.id
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Mention someone with @[Their Name](their-user-id) - the token an editor inserts when you pick a
+  person from the member search. A bare "@Jane" is just text: there are no usernames to match.
+
+  Mentions of people who cannot see the project are dropped from mentionedUserIds, but the text
+  is kept exactly as written.
+}
