@@ -447,6 +447,17 @@ IssueAssignee
 UNIQUE (issue_id, user_id)
 ```
 
+> **As built:** an assignee must be able to see the project — §6 resolution, checked against the
+> *assignee*, not the person assigning. Nobody can be put on a PRIVATE project's work without
+> being on the project (`ASSIGNEE_CANNOT_SEE_PROJECT`).
+>
+> Adding and removing are both idempotent: a repeat is a no-op, and two people racing to assign
+> the same person both get the single resulting row back. `POST /issues/{id}/assignees` therefore
+> answers 200 with the issue's full assignee list rather than 201. Bulk assign *adds* and never
+> replaces, and validates every issue id before writing any, so one bad id assigns nothing.
+>
+> Issue responses carry `assigneeIds`, loaded for a whole page in one query.
+
 ### IssueLink
 
 ```sql
@@ -925,7 +936,7 @@ DELETE /api/v1/issues/{issueId}/block                               👤 Clear b
 PATCH  /api/v1/issues/{issueId}/position                            👤 Update position
 POST   /api/v1/issues/{issueId}/move-to-sprint                      👥 Move to sprint
 POST   /api/v1/issues/{issueId}/move-to-backlog                     👥 Move to backlog
-POST   /api/v1/projects/{projectId}/issues/bulk-assign              👥 Bulk assign issues   -- not built: needs assignees
+POST   /api/v1/projects/{projectId}/issues/bulk-assign              👥 Bulk assign issues
 ```
 
 ### Subtask Endpoints
@@ -1423,7 +1434,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V11__create_issue_types.sql                -- per project, backfilled for existing ones
 ├── V12__create_default_issue_statuses.sql     -- template rows (§33)
 ├── V13__create_issue_statuses.sql             -- per project, positions unique per board
-└── V14__create_issues.sql                     -- status_id, number, float positions, version
+├── V14__create_issues.sql                     -- status_id, number, float positions, version
+└── V15__create_issue_assignees.sql            -- unique per (issue, user); indexed by user too
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -1432,7 +1444,6 @@ higher number first. Email verification was originally penciled in as V3 and is 
 
     create_email_verification_tokens.sql
     create_labels.sql
-    create_issue_assignees.sql
     create_issue_links.sql
     create_issue_labels.sql
     create_comments.sql
@@ -4164,8 +4175,8 @@ omits the join-table migrations; the canonical list includes them and is FK-orde
 
 > **As built:** `statusCategory`, `statusId`, `typeId`, `priority`, `reporterId`, `isBlocked`,
 > `dueBefore`, `dueAfter` and `q` all work, on both list endpoints, with `page` and `pageSize`
-> feeding the `meta` block of the envelope. `assigneeId`, `unassigned` and `labelId` are not
-> wired: assignees and labels do not exist yet.
+> feeding the `meta` block of the envelope. `assigneeId` and `unassigned` are wired through
+> subqueries on `issue_assignees`; `labelId` is not, since labels do not exist yet.
 >
 > Since statuses are per project, a `statusCategory` is resolved to that project's status ids
 > before the query runs rather than joined at the database level — which is also why the sprint
