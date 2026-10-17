@@ -457,6 +457,12 @@ UNIQUE (issue_id, user_id)
 > replaces, and validates every issue id before writing any, so one bad id assigns nothing.
 >
 > Issue responses carry `assigneeIds`, loaded for a whole page in one query.
+>
+> The same rule is held *after* assignment. `AssignmentRevoker` re-checks access whenever it can
+> shrink — leaving or being removed from a workspace, losing ADMIN, being removed from a project,
+> or a project going PRIVATE — and drops only the assignments whose holder can no longer see the
+> project. It re-checks rather than deleting outright, because losing one route is not always
+> losing the project: a demoted admin keeps every PUBLIC one.
 
 ### IssueLink
 
