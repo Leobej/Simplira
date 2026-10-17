@@ -20,5 +20,6 @@ docs {
   Refused when it is the last status in its category, or when it is the default new issues land
   on - hand the default to another status first.
 
-  Once issues exist, deleting a status that is in use will also require migrateToStatusId (§33).
+  A status still holding issues is refused with 409 STATUS_HAS_ISSUES. Add ?migrateToStatusId=<id>
+  to move them somewhere first - the delete and the migration happen together.
 }

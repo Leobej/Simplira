@@ -3702,12 +3702,16 @@ int expireOutdated(@Param("now") LocalDateTime now);
 
 ## 29. CloseSprintRequest DTO
 
-> **As built:** the request shape below is implemented exactly as specified, so clients will not
-> have to change — but the incomplete-issue handling is not wired, because issues do not exist
-> yet. Closing validates the target sprint (same project, not already COMPLETED) and moves the
-> sprint to COMPLETED; `MOVE_TO_BACKLOG` and `MOVE_TO_SPRINT` currently differ only in that
-> validation. Wire the issue movement, the audit entry and the notification with the issues slice.
-
+> **As built:** implemented as specified, including the incomplete-issue handling. Closing
+> validates the target sprint (same project, not already COMPLETED), moves every unfinished issue
+> to the backlog or the target sprint, and then completes the sprint.
+>
+> "Unfinished" is decided by the status *category*, never by its name — a project whose finished
+> column is called "Shipped" still carries the right issues over. Finished issues deliberately
+> stay attached to the sprint they were completed in, so the sprint keeps its history.
+>
+> Still missing from the snippet below: the audit entry and the notification, which arrive with
+> those slices.
 ```java
 public record CloseSprintRequest(
     @NotNull IncompleteIssueAction incompleteIssueAction,
@@ -3934,9 +3938,14 @@ projectRepository.findByIdAndDeletedAtIsNull(projectId)
 > collide the moment two statuses swap. The adapter parks the new order in the negative range
 > first, then flips the whole project back in a single statement.
 >
-> Deleting a status enforces rule 1 (never empty a category) and refuses to remove the default,
-> since new issues need somewhere to land. Rule 2 — migrating issues off the status — is not
-> wired: there are no issues yet. `DeleteStatusRequest.migrateToStatusId` lands with them.
+> Deleting a status enforces rule 1 (never empty a category), refuses to remove the default since
+> new issues need somewhere to land, and enforces rule 2: a status still holding issues is
+> refused with `STATUS_HAS_ISSUES` until the caller names where they go. `migrateToStatusId` is a
+> **query parameter** rather than the `DeleteStatusRequest` body below — DELETE bodies are
+> unevenly supported by clients and proxies, and it carries one optional id.
+>
+> Issue types have no equivalent migration, since §33 defines none: a type still in use is simply
+> refused with `ISSUE_TYPE_IN_USE` until its issues are retyped.
 >
 > Both "one default per project" invariants are backed by partial unique indexes as well as the
 > service check, the same split §37.7 uses elsewhere.
