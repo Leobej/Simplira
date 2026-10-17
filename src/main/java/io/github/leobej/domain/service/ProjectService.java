@@ -42,6 +42,7 @@ public class ProjectService {
     private final WorkspaceAuthorization workspaceAuthorization;
     private final ProjectAuthorization projectAuthorization;
     private final ProjectSetupService projectSetupService;
+    private final AssignmentRevoker assignmentRevoker;
 
     public ProjectService(ProjectRepository projectRepository,
                           ProjectMemberRepository projectMemberRepository,
@@ -49,7 +50,8 @@ public class ProjectService {
                           UserRepository userRepository,
                           WorkspaceAuthorization workspaceAuthorization,
                           ProjectAuthorization projectAuthorization,
-                          ProjectSetupService projectSetupService) {
+                          ProjectSetupService projectSetupService,
+                          AssignmentRevoker assignmentRevoker) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
@@ -57,6 +59,7 @@ public class ProjectService {
         this.workspaceAuthorization = workspaceAuthorization;
         this.projectAuthorization = projectAuthorization;
         this.projectSetupService = projectSetupService;
+        this.assignmentRevoker = assignmentRevoker;
     }
 
     public Project create(UUID workspaceId,
@@ -130,7 +133,13 @@ public class ProjectService {
             }
             project.changeKey(normalized);
         }
-        return projectRepository.save(project);
+        boolean goingPrivate = visibility == ProjectVisibility.PRIVATE;
+        Project saved = projectRepository.save(project);
+        if (goingPrivate) {
+            // Workspace members who were only here because it was PUBLIC lose sight of it.
+            assignmentRevoker.revokeLostAccessInProject(projectId);
+        }
+        return saved;
     }
 
     public void delete(UUID projectId, UUID actorId) {
@@ -204,6 +213,9 @@ public class ProjectService {
         projectMemberRepository.find(projectId, userId)
                 .orElseThrow(() -> new ProjectMemberNotFoundException(userId));
         projectMemberRepository.remove(projectId, userId);
+        // Only matters on a PRIVATE project; on a PUBLIC one they can still see it, so the
+        // re-check keeps their assignments.
+        assignmentRevoker.revokeLostAccessInProject(projectId);
     }
 
     private User loadUser(UUID userId) {

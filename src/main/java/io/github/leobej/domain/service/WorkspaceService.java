@@ -33,15 +33,18 @@ public class WorkspaceService {
     private final UserWorkspaceRepository userWorkspaceRepository;
     private final UserRepository userRepository;
     private final WorkspaceAuthorization authorization;
+    private final AssignmentRevoker assignmentRevoker;
 
     public WorkspaceService(WorkspaceRepository workspaceRepository,
                             UserWorkspaceRepository userWorkspaceRepository,
                             UserRepository userRepository,
-                            WorkspaceAuthorization authorization) {
+                            WorkspaceAuthorization authorization,
+                            AssignmentRevoker assignmentRevoker) {
         this.workspaceRepository = workspaceRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
         this.userRepository = userRepository;
         this.authorization = authorization;
+        this.assignmentRevoker = assignmentRevoker;
     }
 
     public Workspace create(String name, String requestedSlug, UUID actorId) {
@@ -131,6 +134,10 @@ public class WorkspaceService {
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(targetUserId));
         membership.changeRole(newRole);
         UserWorkspace saved = userWorkspaceRepository.save(membership);
+        if (newRole != WorkspaceRole.ADMIN) {
+            // An admin sees every private project; a demoted one may not any more.
+            assignmentRevoker.revokeLostAccess(workspaceId, targetUserId);
+        }
 
         User user = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(targetUserId));
@@ -148,6 +155,7 @@ public class WorkspaceService {
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(targetUserId));
 
         userWorkspaceRepository.remove(workspaceId, targetUserId);
+        assignmentRevoker.revokeLostAccess(workspaceId, targetUserId);
     }
 
     public void leave(UUID workspaceId, UUID actorId) {
@@ -159,6 +167,7 @@ public class WorkspaceService {
                     "The workspace owner cannot leave; transfer ownership or delete the workspace");
         }
         userWorkspaceRepository.remove(workspaceId, actorId);
+        assignmentRevoker.revokeLostAccess(workspaceId, actorId);
     }
 
     private static boolean matches(User user, String needle) {

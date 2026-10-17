@@ -17,6 +17,7 @@ import io.github.leobej.domain.repository.SprintRepository;
 import io.github.leobej.domain.repository.UserRepository;
 import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
+import io.github.leobej.domain.service.AssignmentRevoker;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.InvitationService;
 import io.github.leobej.domain.service.IssueAssigneeService;
@@ -60,8 +61,10 @@ public class DomainServiceConfig {
     public WorkspaceService workspaceService(WorkspaceRepository workspaceRepository,
                                              UserWorkspaceRepository userWorkspaceRepository,
                                              UserRepository userRepository,
-                                             WorkspaceAuthorization authorization) {
-        return new WorkspaceService(workspaceRepository, userWorkspaceRepository, userRepository, authorization);
+                                             WorkspaceAuthorization authorization,
+                                             AssignmentRevoker assignmentRevoker) {
+        return new WorkspaceService(workspaceRepository, userWorkspaceRepository, userRepository,
+                authorization, assignmentRevoker);
     }
 
     @Bean
@@ -89,9 +92,11 @@ public class DomainServiceConfig {
                                          UserRepository userRepository,
                                          WorkspaceAuthorization workspaceAuthorization,
                                          ProjectAuthorization projectAuthorization,
-                                         ProjectSetupService projectSetupService) {
+                                         ProjectSetupService projectSetupService,
+                                         AssignmentRevoker assignmentRevoker) {
         return new ProjectService(projectRepository, projectMemberRepository, userWorkspaceRepository,
-                userRepository, workspaceAuthorization, projectAuthorization, projectSetupService);
+                userRepository, workspaceAuthorization, projectAuthorization, projectSetupService,
+                assignmentRevoker);
     }
 
     @Bean
@@ -144,5 +149,11 @@ public class DomainServiceConfig {
                                                      ProjectAuthorization projectAuthorization) {
         return new IssueAssigneeService(issueAssigneeRepository, issueRepository, userRepository,
                 projectAuthorization);
+    }
+
+    @Bean
+    public AssignmentRevoker assignmentRevoker(IssueAssigneeRepository issueAssigneeRepository,
+                                               ProjectAuthorization projectAuthorization) {
+        return new AssignmentRevoker(issueAssigneeRepository, projectAuthorization);
     }
 }

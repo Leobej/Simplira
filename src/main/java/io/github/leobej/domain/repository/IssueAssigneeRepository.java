@@ -1,5 +1,6 @@
 package io.github.leobej.domain.repository;
 
+import io.github.leobej.domain.model.issue.AssignmentRef;
 import io.github.leobej.domain.model.issue.IssueAssignee;
 
 import java.util.Collection;
@@ -19,4 +20,9 @@ public interface IssueAssigneeRepository {
 
     // One query for a whole page of issues, so a board does not cost a query per card.
     Map<UUID, List<UUID>> findAssigneeIds(Collection<UUID> issueIds);
+
+    // For re-checking access after it changes: everything one person holds in a workspace, and
+    // everything held by anyone in one project.
+    List<AssignmentRef> findInWorkspaceForUser(UUID workspaceId, UUID userId);
+    List<AssignmentRef> findInProject(UUID projectId);
 }

@@ -61,6 +61,16 @@ public class ProjectAuthorization {
         return access;
     }
 
+    // The same resolution as requireAccess, asked about somebody other than the caller.
+    public boolean hasAccess(UUID projectId, UUID userId) {
+        try {
+            requireAccess(projectId, userId);
+            return true;
+        } catch (ProjectNotFoundException ex) {
+            return false;
+        }
+    }
+
     public Project requireProject(UUID projectId) {
         return projectRepository.findById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));

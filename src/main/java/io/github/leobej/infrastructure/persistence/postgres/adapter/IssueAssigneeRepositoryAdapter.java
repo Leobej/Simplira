@@ -1,5 +1,6 @@
 package io.github.leobej.infrastructure.persistence.postgres.adapter;
 
+import io.github.leobej.domain.model.issue.AssignmentRef;
 import io.github.leobej.domain.model.issue.IssueAssignee;
 import io.github.leobej.domain.repository.IssueAssigneeRepository;
 import io.github.leobej.infrastructure.persistence.postgres.entity.IssueAssigneeEntity;
@@ -80,5 +81,19 @@ public class IssueAssigneeRepositoryAdapter implements IssueAssigneeRepository {
                 .collect(Collectors.groupingBy(
                         IssueAssigneeEntity::getIssueId,
                         Collectors.mapping(IssueAssigneeEntity::getUserId, Collectors.toList())));
+    }
+
+    @Override
+    public List<AssignmentRef> findInWorkspaceForUser(UUID workspaceId, UUID userId) {
+        return jpaRepository.findInWorkspaceForUser(workspaceId, userId).stream()
+                .map(row -> new AssignmentRef(row.getIssueId(), row.getProjectId(), row.getUserId()))
+                .toList();
+    }
+
+    @Override
+    public List<AssignmentRef> findInProject(UUID projectId) {
+        return jpaRepository.findInProject(projectId).stream()
+                .map(row -> new AssignmentRef(row.getIssueId(), row.getProjectId(), row.getUserId()))
+                .toList();
     }
 }
