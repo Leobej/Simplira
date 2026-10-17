@@ -4,6 +4,7 @@ import io.github.leobej.domain.port.AccessTokenIssuer;
 import io.github.leobej.domain.port.PasswordHasher;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.port.EmailService;
+import io.github.leobej.domain.repository.CommentRepository;
 import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
 import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
@@ -19,6 +20,7 @@ import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AssignmentRevoker;
 import io.github.leobej.domain.service.AuthService;
+import io.github.leobej.domain.service.CommentService;
 import io.github.leobej.domain.service.InvitationService;
 import io.github.leobej.domain.service.IssueAssigneeService;
 import io.github.leobej.domain.service.IssueService;
@@ -155,5 +157,13 @@ public class DomainServiceConfig {
     public AssignmentRevoker assignmentRevoker(IssueAssigneeRepository issueAssigneeRepository,
                                                ProjectAuthorization projectAuthorization) {
         return new AssignmentRevoker(issueAssigneeRepository, projectAuthorization);
+    }
+
+    @Bean
+    public CommentService commentService(CommentRepository commentRepository,
+                                         IssueRepository issueRepository,
+                                         UserRepository userRepository,
+                                         ProjectAuthorization projectAuthorization) {
+        return new CommentService(commentRepository, issueRepository, userRepository, projectAuthorization);
     }
 }

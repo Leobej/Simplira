@@ -6,6 +6,7 @@ import io.github.leobej.shared.exception.EmailAlreadyExistsException;
 import io.github.leobej.shared.exception.InvalidCredentialsException;
 import io.github.leobej.shared.exception.AlreadyMemberException;
 import io.github.leobej.shared.exception.BusinessRuleException;
+import io.github.leobej.shared.exception.CommentNotFoundException;
 import io.github.leobej.shared.exception.DuplicateNameException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
@@ -201,5 +202,11 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleVersionConflict(Exception ex) {
         return ApiResponse.failure(ErrorResponse.of("ISSUE_VERSION_CONFLICT",
                 "This issue was changed by someone else. Reload and reapply your edit."));
+    }
+
+    @ExceptionHandler(CommentNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleCommentNotFound(CommentNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("COMMENT_NOT_FOUND", ex.getMessage()));
     }
 }
