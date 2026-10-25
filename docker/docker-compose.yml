@@ -18,21 +18,6 @@ services:
       PGADMIN_DEFAULT_EMAIL: admin@simplira.com
       PGADMIN_DEFAULT_PASSWORD: admin
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-      - "61613:61613"
-    environment:
-      RABBITMQ_DEFAULT_USER: simplira
-      RABBITMQ_DEFAULT_PASS: simplira
-    command: >
-      bash -c "rabbitmq-plugins enable rabbitmq_stomp &&
-               rabbitmq-server"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-
   # Local stand-in for S3/R2 (§27), for attachments. Accepts any credentials. The store root must be
   # /s3mockroot for a named volume to be writable by the image's non-root user (S3Mock README).
   s3mock:
@@ -56,5 +41,4 @@ services:
 
 volumes:
   postgres_data:
-  rabbitmq_data:
   s3mock_data:

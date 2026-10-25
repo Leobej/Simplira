@@ -8,8 +8,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -71,14 +69,15 @@ class AuthFlowTest extends PostgresTestBase {
     @Test
     void exposesHealthWithoutAuthentication() throws Exception {
         // The container HEALTHCHECK curls liveness with no credentials. Liveness deliberately
-        // ignores external dependencies, so it stays UP with no broker running.
+        // ignores external dependencies, so a database blip does not get the container restarted.
         mockMvc.perform(get("/actuator/health/liveness"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
 
-        // The full aggregate is reachable unauthenticated too; it reports 503 while RabbitMQ
-        // is unreachable, which is why it is not what the container health check calls.
-        int status = mockMvc.perform(get("/actuator/health")).andReturn().getResponse().getStatus();
-        assertThat(status).isNotIn(401, 403);
+        // The full aggregate is reachable unauthenticated too, and with the database up it is UP:
+        // nothing else it checks needs a server running (mail health is switched off).
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
     }
 }
