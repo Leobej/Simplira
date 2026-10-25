@@ -4,6 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import io.github.leobej.domain.model.workspace.UserWorkspace;
 import io.github.leobej.domain.model.workspace.WorkspaceRole;
 import io.github.leobej.domain.repository.UserWorkspaceRepository;
+import io.github.leobej.infrastructure.messaging.config.ConnectionSweeper;
 import io.github.leobej.support.PostgresTestBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -25,10 +26,13 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.lang.reflect.Type;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -51,6 +55,9 @@ class LiveUpdatesTest extends PostgresTestBase {
 
     @Autowired
     private SimpUserRegistry userRegistry;
+
+    @Autowired
+    private ConnectionSweeper connectionSweeper;
 
     private final WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
 
@@ -126,6 +133,45 @@ class LiveUpdatesTest extends PostgresTestBase {
         assertRefused(outsider, "/topic/anything-else");
     }
 
+    @Test
+    void aConnectionEndsOnceTheTokenItOpenedWithExpires() throws Exception {
+        Team team = newTeam("PUBLIC");
+        Recorder board = new Recorder();
+        connect(team.dev(), board).subscribe("/topic/project/" + team.projectId(), board);
+        awaitSubscribed(team.dev());
+
+        // While the token is good, a sweep leaves the connection alone.
+        connectionSweeper.sweep(Instant.now());
+        createIssue(team);
+        assertThat(JsonPath.<String>read(board.next(), "$.type")).isEqualTo("ISSUE_CREATED");
+        assertThat(board.errors).isEmpty();
+
+        // Tokens last 15 minutes.
+        connectionSweeper.sweep(Instant.now().plus(Duration.ofMinutes(16)));
+        assertThat(board.errors.poll(5, TimeUnit.SECONDS)).isEqualTo("Access token expired");
+        awaitDisconnected(team.dev());
+    }
+
+    @Test
+    void aConnectionEndsWhenWhatItWatchesIsNoLongerItsToSee() throws Exception {
+        Team team = newTeam("PUBLIC");
+        Recorder board = new Recorder();
+        connect(team.dev(), board).subscribe("/topic/project/" + team.projectId(), board);
+        awaitSubscribed(team.dev());
+
+        // dev is in the workspace but not on the project, so making it PRIVATE shuts them out.
+        mockMvc.perform(patch("/api/v1/projects/" + team.projectId())
+                        .header("Authorization", bearer(team.admin()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibility\":\"PRIVATE\"}"))
+                .andExpect(status().isOk());
+        connectionSweeper.sweep(Instant.now());
+
+        assertThat(board.errors.poll(5, TimeUnit.SECONDS))
+                .isEqualTo("No longer allowed to subscribe to /topic/project/" + team.projectId());
+        awaitDisconnected(team.dev());
+    }
+
     private void assertRefused(Account account, String destination) throws Exception {
         Recorder recorder = new Recorder();
         connect(account, recorder).subscribe(destination, recorder);
@@ -141,15 +187,26 @@ class LiveUpdatesTest extends PostgresTestBase {
 
     // SUBSCRIBE has no reply, so wait until the server has registered it before changing anything.
     private void awaitSubscribed(Account account) throws InterruptedException {
+        await("The subscription never registered", () -> {
+            var user = userRegistry.getUser(account.userId().toString());
+            return user != null && user.getSessions().stream().anyMatch(s -> !s.getSubscriptions().isEmpty());
+        });
+    }
+
+    // The ERROR frame is not the end of it: the socket has to actually close.
+    private void awaitDisconnected(Account account) throws InterruptedException {
+        await("The session was never closed", () -> userRegistry.getUser(account.userId().toString()) == null);
+    }
+
+    private static void await(String failure, BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
-            var user = userRegistry.getUser(account.userId().toString());
-            if (user != null && user.getSessions().stream().anyMatch(s -> !s.getSubscriptions().isEmpty())) {
+            if (condition.getAsBoolean()) {
                 return;
             }
             Thread.sleep(20);
         }
-        throw new AssertionError("The subscription never registered");
+        throw new AssertionError(failure);
     }
 
     private static class Recorder extends StompSessionHandlerAdapter {

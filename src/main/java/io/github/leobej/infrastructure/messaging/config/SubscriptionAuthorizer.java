@@ -12,8 +12,9 @@ import java.util.UUID;
 // listed is refused, the way a new REST endpoint is private until someone opts it in - and a raw
 // /queue/... name is refused because it could be used to listen in on another session's user queue.
 //
-// Checked at SUBSCRIBE only. Someone who loses access keeps an open subscription until they
-// reconnect - which is why the events carry ids and a type, never content (LiveUpdate).
+// Checked at SUBSCRIBE, then again by ConnectionSweeper for as long as the subscription stays open.
+// Someone who loses access can hear events until the next sweep - which is why the events carry
+// ids and a type, never content (LiveUpdate).
 @Component
 public class SubscriptionAuthorizer {
 

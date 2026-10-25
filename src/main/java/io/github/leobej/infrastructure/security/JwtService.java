@@ -47,12 +47,22 @@ public class JwtService implements AccessTokenIssuer {
 
     // Validation and subject extraction in one parse — empty means the token is unusable.
     public Optional<UUID> resolveUserId(String token) {
+        return verify(token).map(VerifiedToken::userId);
+    }
+
+    // The same, keeping the expiry: a WebSocket connection outlives the request that opened it,
+    // so it has to know when its token stops being good.
+    public Optional<VerifiedToken> verify(String token) {
         try {
-            return Optional.of(UUID.fromString(parseClaims(token).getSubject()));
+            Claims claims = parseClaims(token);
+            return Optional.of(new VerifiedToken(UUID.fromString(claims.getSubject()),
+                    claims.getExpiration().toInstant()));
         } catch (Exception e) {
             return Optional.empty();
         }
     }
+
+    public record VerifiedToken(UUID userId, Instant expiresAt) {}
 
     private Claims parseClaims(String token) {
         return Jwts.parser()
