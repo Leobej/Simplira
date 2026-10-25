@@ -1235,10 +1235,27 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 >   `StompAuthenticationInterceptor` the way the REST filter checks it; a bad or missing one gets
 >   an ERROR frame. It is checked once: a connection outlives the 15-minute token, and logout does
 >   not close it.
-> - **What a client can do.** SUBSCRIBE to `/user/queue/notifications` and nothing else; SEND is
->   refused. Anything new is opted in by adding it to the interceptor's list, the same way new REST
->   endpoints start private. A raw `/queue/...` name is refused because it could be used to listen
->   to another session's user queue.
+> - **What a client can do.** SUBSCRIBE, by `SubscriptionAuthorizer`, to exactly these — anything
+>   else is refused, the way a new REST endpoint starts private; SEND is refused:
+>
+>   | Destination | Allowed when | Carries |
+>   |---|---|---|
+>   | `/user/queue/notifications` | always (reaches only its own user) | new notifications |
+>   | `/topic/project/{projectId}` | the §6 rule for that project | changes to its issues, sprints, members and itself |
+>   | `/topic/issue/{issueId}` | the §6 rule for the issue's project | changes to that issue, including its comments |
+>   | `/topic/workspace/{workspaceId}` | workspace member | workspace renames and member changes |
+>
+>   A raw `/queue/...` name is refused because it could be used to listen to another session's
+>   user queue. Access is checked at SUBSCRIBE only: someone who loses it keeps an open
+>   subscription until they reconnect — which is why board events carry ids and a type, never
+>   content.
+> - **Board events ride on the audit log.** Every `AuditTrail` entry is also published as a
+>   `LiveUpdate`, since that is already the one place that sees every meaningful change — no
+>   second hook in every service. The one addition is `ISSUE_REPOSITIONED`: reordering is not
+>   history, but a shared board needs it most. The payload is §8's lean shape —
+>   `{ type, projectId, issueId, entityType, entityId, actorId, timestamp }`, where `type` is the
+>   audit entry's entity and action (`ISSUE_STATUS_CHANGED`, `COMMENT_CREATED`, `SPRINT_CLOSED`) —
+>   and the client refetches what it shows.
 > - **Notifications** use Spring's user destinations rather than `/topic/user/{userId}/...`
 >   below: `/user/queue/notifications` reaches only the connected user, so there is no user id in
 >   the destination to check. The payload is `{ "type": "NOTIFICATION_CREATED", ... }` with the
@@ -1247,8 +1264,6 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 >   Going multi-instance is a change to `WebSocketConfig` alone — `enableStompBrokerRelay`,
 >   reactor-netty on the classpath, and `setUserDestinationBroadcast` /
 >   `setUserRegistryBroadcast` so a user destination reaches sessions on another instance.
-> - **Not built yet:** the board, issue and workspace topics below. They will need a per-topic
->   access check in the interceptor (the §6 rule for `/topic/project/{id}`) before they are opened.
 >
 > **Email outbox (V24),** instead of the RabbitMQ email queue under "RabbitMQ Additional Uses":
 > notification emails are written to `email_outbox` by `Notifier` and sent by
