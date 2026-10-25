@@ -1,0 +1,24 @@
+meta {
+  name: Get avatar
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}{{avatarUrl}}
+  body: none
+  auth: none
+}
+
+settings {
+  followRedirects: false
+}
+
+assert {
+  res.status: eq 302
+}
+
+docs {
+  No auth, as an <img> would ask. Answers 302 with a Location header: a signed link to the image,
+  valid for an hour. Open that link in a browser to see it. An old or made-up avatar id is 404.
+}

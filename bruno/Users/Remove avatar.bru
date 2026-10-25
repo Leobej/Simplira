@@ -1,0 +1,19 @@
+meta {
+  name: Remove avatar
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/users/me/avatar
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  avatarUrl goes back to null and the image is deleted from storage; Get avatar is 404 afterwards.
+}

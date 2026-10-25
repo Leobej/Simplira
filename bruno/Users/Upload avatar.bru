@@ -1,0 +1,31 @@
+meta {
+  name: Upload avatar
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/users/me/avatar
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  file: @file(fixtures/sample.png)
+}
+
+vars:post-response {
+  avatarUrl: res.body.data.avatarUrl
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Needs the S3Mock from docker-compose. Up to 2 MB; PNG, JPEG, GIF or WebP - the type is read from
+  the bytes, and SVG is refused.
+
+  data.avatarUrl is a path on this API, not a storage link - an <img> cannot send a bearer token.
+  Get avatar follows it. Uploading again gives a new path and retires the old one.
+}

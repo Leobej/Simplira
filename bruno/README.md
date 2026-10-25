@@ -37,6 +37,9 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Users 2 | Get me - no token | 401 `UNAUTHENTICATED` |
 | Users 3 | Update profile | 200 — the name only |
 | Users 4 | Change password | 200 — to the same value; signs out other devices, captures a new `accessToken` |
+| Users 5 | Upload avatar | 200 — `fixtures/sample.png`; captures `avatarUrl` |
+| Users 6 | Get avatar | 302 — no auth, as an `<img>` asks; Location is the signed image link |
+| Users 7 | Remove avatar | 204 — the image is deleted from storage |
 | Workspaces 1 | Create workspace | 201 — captures `workspaceId`; slug derived from the name |
 | Workspaces 2 | List my workspaces | 200 — only workspaces you belong to |
 | Workspaces 3 | Get workspace | 200 — a non-member gets 404, not 403 |
