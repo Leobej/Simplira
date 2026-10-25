@@ -3,13 +3,11 @@ package io.github.leobej.application.api.user;
 import com.jayway.jsonpath.JsonPath;
 import io.github.leobej.application.api.auth.RefreshTokenCookie;
 import io.github.leobej.support.PostgresTestBase;
-import io.github.leobej.support.RecordingEmailConfig;
 import io.github.leobej.support.RecordingEmailConfig.RecordingEmailService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -25,7 +23,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @AutoConfigureMockMvc
-@Import(RecordingEmailConfig.class)
 class AccountFlowTest extends PostgresTestBase {
 
     private static final String PASSWORD = "correct-horse";

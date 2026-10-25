@@ -46,6 +46,14 @@ services:
     volumes:
       - s3mock_data:/s3mockroot
 
+  # Catches every email the app sends in development (§25): SMTP on 1025, inbox at
+  # http://localhost:8025. Nothing leaves the machine.
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   postgres_data:
   rabbitmq_data:

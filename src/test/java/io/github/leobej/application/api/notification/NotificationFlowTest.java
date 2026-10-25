@@ -11,12 +11,10 @@ import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.service.EmailOutboxDispatcher;
 import io.github.leobej.domain.service.NotificationService;
 import io.github.leobej.support.PostgresTestBase;
-import io.github.leobej.support.RecordingEmailConfig;
 import io.github.leobej.support.RecordingEmailConfig.RecordingEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -36,7 +34,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @AutoConfigureMockMvc
-@Import(RecordingEmailConfig.class)
 class NotificationFlowTest extends PostgresTestBase {
 
     @Autowired

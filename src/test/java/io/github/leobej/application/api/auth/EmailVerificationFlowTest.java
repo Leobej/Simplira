@@ -2,12 +2,10 @@ package io.github.leobej.application.api.auth;
 
 import com.jayway.jsonpath.JsonPath;
 import io.github.leobej.support.PostgresTestBase;
-import io.github.leobej.support.RecordingEmailConfig;
 import io.github.leobej.support.RecordingEmailConfig.RecordingEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,7 +21,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // The one suite that runs with the gate on, the way the app does: the test profile switches it off
 // so suites about other things need not verify every account they create.
 @AutoConfigureMockMvc
-@Import(RecordingEmailConfig.class)
 @TestPropertySource(properties = "simplira.auth.require-verified-email=true")
 class EmailVerificationFlowTest extends PostgresTestBase {
 
