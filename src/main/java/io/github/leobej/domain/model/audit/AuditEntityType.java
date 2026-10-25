@@ -9,5 +9,6 @@ public enum AuditEntityType {
     MEMBER,
     SPRINT,
     ISSUE,
-    COMMENT
+    COMMENT,
+    ATTACHMENT
 }

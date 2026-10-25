@@ -33,6 +33,20 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  # Local stand-in for S3/R2 (§27), for attachments. Accepts any credentials. The store root must be
+  # /s3mockroot for a named volume to be writable by the image's non-root user (S3Mock README).
+  s3mock:
+    image: adobe/s3mock:5.2.3
+    ports:
+      - "9090:9090"
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: simplira-attachments
+    volumes:
+      - s3mock_data:/s3mockroot
+
 volumes:
   postgres_data:
   rabbitmq_data:
+  s3mock_data:

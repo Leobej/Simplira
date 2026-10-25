@@ -10,7 +10,9 @@ import io.github.leobej.shared.exception.CommentNotFoundException;
 import io.github.leobej.shared.exception.DuplicateNameException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
 import io.github.leobej.shared.exception.IssueLinkNotFoundException;
+import io.github.leobej.shared.exception.AttachmentNotFoundException;
 import io.github.leobej.shared.exception.EmailNotVerifiedException;
+import io.github.leobej.shared.exception.InvalidAttachmentException;
 import io.github.leobej.shared.exception.InvalidVerificationTokenException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.NotificationNotFoundException;
@@ -34,11 +36,13 @@ import io.github.leobej.shared.exception.SlugAlreadyExistsException;
 import io.github.leobej.shared.exception.WorkspaceMemberNotFoundException;
 import io.github.leobej.shared.exception.WorkspaceNotFoundException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.List;
 
@@ -225,6 +229,31 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Void> handleIssueLinkNotFound(IssueLinkNotFoundException ex) {
         return ApiResponse.failure(ErrorResponse.of("ISSUE_LINK_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(AttachmentNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleAttachmentNotFound(AttachmentNotFoundException ex) {
+        return ApiResponse.failure(ErrorResponse.of("ATTACHMENT_NOT_FOUND", ex.getMessage()));
+    }
+
+    // 413 for too big, 415 for not an allowed image, 400 for anything else wrong with the file.
+    @ExceptionHandler(InvalidAttachmentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidAttachment(InvalidAttachmentException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "FILE_TOO_LARGE" -> HttpStatus.CONTENT_TOO_LARGE;
+            case "INVALID_FILE_TYPE" -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.failure(ErrorResponse.of(ex.getCode(), ex.getMessage())));
+    }
+
+    // Over spring.servlet.multipart's limit, refused before the request reaches a controller -
+    // answered the same as the service's own size check.
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
+    public ApiResponse<Void> handleUploadTooLarge(MaxUploadSizeExceededException ex) {
+        return ApiResponse.failure(ErrorResponse.of("FILE_TOO_LARGE", "Maximum file size is 10 MB"));
     }
 
     @ExceptionHandler(InvalidVerificationTokenException.class)

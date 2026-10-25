@@ -62,6 +62,13 @@ public class AuditTrail {
                 commentId, action, oldValue, newValue, actorId);
     }
 
+    // Filed under its issue like a comment, so the issue's history shows files coming and going.
+    public void onAttachment(Issue issue, UUID attachmentId, AuditAction action, Map<String, Object> oldValue,
+                             Map<String, Object> newValue, UUID actorId) {
+        record(workspaceOf(issue.getProjectId()), issue.getProjectId(), issue.getId(), AuditEntityType.ATTACHMENT,
+                attachmentId, action, oldValue, newValue, actorId);
+    }
+
     public void onSprint(Sprint sprint, AuditAction action, Map<String, Object> oldValue,
                          Map<String, Object> newValue, UUID actorId) {
         record(workspaceOf(sprint.getProjectId()), sprint.getProjectId(), null, AuditEntityType.SPRINT,

@@ -1,7 +1,10 @@
 package io.github.leobej.infrastructure.config;
 
 import io.github.leobej.domain.port.AccessTokenIssuer;
+import io.github.leobej.domain.port.ContentTypeDetector;
+import io.github.leobej.domain.port.FileStorage;
 import io.github.leobej.domain.port.PasswordHasher;
+import io.github.leobej.domain.repository.AttachmentRepository;
 import io.github.leobej.domain.repository.AuditLogRepository;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.port.EmailService;
@@ -28,6 +31,7 @@ import io.github.leobej.domain.repository.UserRepository;
 import io.github.leobej.domain.repository.UserWorkspaceRepository;
 import io.github.leobej.domain.repository.WorkspaceRepository;
 import io.github.leobej.domain.service.AssignmentRevoker;
+import io.github.leobej.domain.service.AttachmentService;
 import io.github.leobej.domain.service.AuditLogService;
 import io.github.leobej.domain.service.AuditTrail;
 import io.github.leobej.domain.service.AuthService;
@@ -287,6 +291,17 @@ public class DomainServiceConfig {
                                          AuditTrail auditTrail) {
         return new CommentService(commentRepository, issueRepository, userRepository, projectAuthorization,
                 notifier, auditTrail);
+    }
+
+    @Bean
+    public AttachmentService attachmentService(AttachmentRepository attachmentRepository,
+                                               IssueRepository issueRepository,
+                                               ProjectAuthorization projectAuthorization,
+                                               FileStorage fileStorage,
+                                               ContentTypeDetector contentTypeDetector,
+                                               AuditTrail auditTrail) {
+        return new AttachmentService(attachmentRepository, issueRepository, projectAuthorization, fileStorage,
+                contentTypeDetector, auditTrail);
     }
 
     @Bean
