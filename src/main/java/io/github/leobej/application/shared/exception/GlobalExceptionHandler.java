@@ -10,6 +10,8 @@ import io.github.leobej.shared.exception.CommentNotFoundException;
 import io.github.leobej.shared.exception.DuplicateNameException;
 import io.github.leobej.shared.exception.IssueStatusNotFoundException;
 import io.github.leobej.shared.exception.IssueLinkNotFoundException;
+import io.github.leobej.shared.exception.EmailNotVerifiedException;
+import io.github.leobej.shared.exception.InvalidVerificationTokenException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.NotificationNotFoundException;
 import io.github.leobej.shared.exception.IssueTypeNotFoundException;
@@ -223,6 +225,19 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Void> handleIssueLinkNotFound(IssueLinkNotFoundException ex) {
         return ApiResponse.failure(ErrorResponse.of("ISSUE_LINK_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidVerificationTokenException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidVerificationToken(InvalidVerificationTokenException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_VERIFICATION_TOKEN", ex.getMessage()));
+    }
+
+    // 403, not 401: the caller is authenticated, just not yet allowed this.
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Void> handleEmailNotVerified(EmailNotVerifiedException ex) {
+        return ApiResponse.failure(ErrorResponse.of("EMAIL_NOT_VERIFIED", ex.getMessage()));
     }
 
     @ExceptionHandler(NotificationNotFoundException.class)

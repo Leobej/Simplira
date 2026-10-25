@@ -10,7 +10,9 @@ import io.github.leobej.shared.exception.DuplicateInvitationException;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -68,6 +70,12 @@ public class InvitationRepositoryAdapter implements InvitationRepository {
     @Override
     public void delete(UUID invitationId) {
         jpaRepository.deleteById(invitationId);
+    }
+
+    @Override
+    @Transactional
+    public int expireOutdated(Instant now) {
+        return jpaRepository.expireOutdated(now, InvitationStatus.PENDING, InvitationStatus.EXPIRED);
     }
 
     private static boolean isDuplicatePending(DataIntegrityViolationException ex) {

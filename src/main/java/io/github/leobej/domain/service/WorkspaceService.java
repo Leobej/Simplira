@@ -36,22 +36,26 @@ public class WorkspaceService {
     private final WorkspaceAuthorization authorization;
     private final AssignmentRevoker assignmentRevoker;
     private final AuditTrail auditTrail;
+    private final VerifiedEmailGate verifiedEmailGate;
 
     public WorkspaceService(WorkspaceRepository workspaceRepository,
                             UserWorkspaceRepository userWorkspaceRepository,
                             UserRepository userRepository,
                             WorkspaceAuthorization authorization,
                             AssignmentRevoker assignmentRevoker,
-                            AuditTrail auditTrail) {
+                            AuditTrail auditTrail,
+                            VerifiedEmailGate verifiedEmailGate) {
         this.workspaceRepository = workspaceRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
         this.userRepository = userRepository;
         this.authorization = authorization;
         this.assignmentRevoker = assignmentRevoker;
         this.auditTrail = auditTrail;
+        this.verifiedEmailGate = verifiedEmailGate;
     }
 
     public Workspace create(String name, String requestedSlug, UUID actorId) {
+        verifiedEmailGate.require(actorId);
         Workspace workspace = workspaceRepository.save(
                 Workspace.create(name, resolveSlug(name, requestedSlug), actorId));
         // The creator owns the workspace and is its first ADMIN.

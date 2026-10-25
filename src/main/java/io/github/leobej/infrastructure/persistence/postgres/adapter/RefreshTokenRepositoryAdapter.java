@@ -40,4 +40,10 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
     public void revokeAllForUser(UUID userId) {
         jpaRepository.revokeAllForUser(userId, Instant.now());
     }
+
+    @Override
+    @Transactional
+    public int deleteExpired(Instant now) {
+        return jpaRepository.deleteExpired(now);
+    }
 }

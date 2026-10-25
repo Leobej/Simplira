@@ -13,6 +13,7 @@ import io.github.leobej.shared.exception.InvalidRefreshTokenException;
 import io.github.leobej.shared.util.TokenGenerator;
 
 import java.time.Duration;
+import java.time.Instant;
 
 // Pure domain: no Spring annotations, no infrastructure imports.
 // Wired as a bean by infrastructure.config.DomainServiceConfig.
@@ -22,17 +23,20 @@ public class AuthService {
     private final PasswordHasher passwordHasher;
     private final AccessTokenIssuer accessTokenIssuer;
     private final Duration refreshTokenLifetime;
+    private final EmailVerificationService emailVerificationService;
 
     public AuthService(UserRepository userRepository,
                        RefreshTokenRepository refreshTokenRepository,
                        PasswordHasher passwordHasher,
                        AccessTokenIssuer accessTokenIssuer,
-                       Duration refreshTokenLifetime) {
+                       Duration refreshTokenLifetime,
+                       EmailVerificationService emailVerificationService) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordHasher = passwordHasher;
         this.accessTokenIssuer = accessTokenIssuer;
         this.refreshTokenLifetime = refreshTokenLifetime;
+        this.emailVerificationService = emailVerificationService;
     }
 
     public User register(String email, String rawPassword, String fullName) {
@@ -44,7 +48,11 @@ public class AuthService {
         User user = User.register(normalizedEmail, hashed, fullName);
         // This check is not atomic — the unique index is the real guard, and the
         // repository turns that violation into the same EmailAlreadyExistsException.
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        // §6: unverified until the link is followed. Login works meanwhile; creating or joining a
+        // workspace does not (VerifiedEmailGate).
+        emailVerificationService.sendLink(saved);
+        return saved;
     }
 
     public LoginResult login(String email, String rawPassword, SessionContext session) {
@@ -89,6 +97,11 @@ public class AuthService {
                     token.revoke();
                     refreshTokenRepository.save(token);
                 });
+    }
+
+    // §28. Every login and refresh adds a row; without this the table only grows.
+    public int purgeExpiredRefreshTokens() {
+        return refreshTokenRepository.deleteExpired(Instant.now());
     }
 
     private RefreshToken requireStored(String rawRefreshToken) {

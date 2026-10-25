@@ -35,6 +35,12 @@ public class LoggingEmailService implements EmailService {
     }
 
     @Override
+    public void sendEmailVerification(String to, String verificationToken) {
+        log.info("[stub email] verify email to={} link={}/verify-email?token={}",
+                to, appBaseUrl, verificationToken);
+    }
+
+    @Override
     public void sendNotification(String to, String subject, String body) {
         log.info("[stub email] notification to={} subject='{}'", to, subject);
     }

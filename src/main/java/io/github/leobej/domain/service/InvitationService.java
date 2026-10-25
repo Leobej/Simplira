@@ -17,6 +17,7 @@ import io.github.leobej.shared.exception.InvitationNotUsableException;
 import io.github.leobej.shared.util.TokenGenerator;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +33,7 @@ public class InvitationService {
     private final EmailService emailService;
     private final Duration invitationLifetime;
     private final AuditTrail auditTrail;
+    private final VerifiedEmailGate verifiedEmailGate;
 
     public InvitationService(InvitationRepository invitationRepository,
                              UserWorkspaceRepository userWorkspaceRepository,
@@ -39,7 +41,8 @@ public class InvitationService {
                              WorkspaceAuthorization authorization,
                              EmailService emailService,
                              Duration invitationLifetime,
-                             AuditTrail auditTrail) {
+                             AuditTrail auditTrail,
+                             VerifiedEmailGate verifiedEmailGate) {
         this.invitationRepository = invitationRepository;
         this.userWorkspaceRepository = userWorkspaceRepository;
         this.userRepository = userRepository;
@@ -47,6 +50,7 @@ public class InvitationService {
         this.emailService = emailService;
         this.invitationLifetime = invitationLifetime;
         this.auditTrail = auditTrail;
+        this.verifiedEmailGate = verifiedEmailGate;
     }
 
     public Invitation invite(UUID workspaceId, String email, WorkspaceRole role, UUID actorId) {
@@ -90,12 +94,26 @@ public class InvitationService {
         invitationRepository.delete(invitationId);
     }
 
+    // §28. Acceptance already refuses an expired invitation; this is what frees the address so the
+    // same person can be invited again without someone first trying the dead link.
+    public int expireOutdated() {
+        return invitationRepository.expireOutdated(Instant.now());
+    }
+
     public AcceptResult accept(String rawToken, User actor) {
         if (rawToken == null || rawToken.isBlank()) {
             throw new InvitationNotFoundException();
         }
         Invitation invitation = invitationRepository.findByTokenHash(TokenGenerator.hash(rawToken))
                 .orElseThrow(InvitationNotFoundException::new);
+
+        // Accepting an invitation sent to your own address proves that address - it verifies you,
+        // below - so it needs no verification first. One forwarded from someone else's address
+        // proves nothing, so the account has to be verified already. Checked before the
+        // invitation is used, so a refusal leaves it usable.
+        if (!invitation.wasSentTo(actor.getEmail())) {
+            verifiedEmailGate.require(actor);
+        }
 
         try {
             invitation.accept(actor.getId());

@@ -10,6 +10,7 @@ import io.github.leobej.domain.repository.CommentRepository;
 import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
 import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
 import io.github.leobej.domain.repository.EmailOutboxRepository;
+import io.github.leobej.domain.repository.EmailVerificationTokenRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
 import io.github.leobej.domain.repository.IssueAssigneeRepository;
 import io.github.leobej.domain.repository.IssueLinkRepository;
@@ -32,6 +33,7 @@ import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.BlockedFlagSync;
 import io.github.leobej.domain.service.CommentService;
 import io.github.leobej.domain.service.EmailOutboxDispatcher;
+import io.github.leobej.domain.service.EmailVerificationService;
 import io.github.leobej.domain.service.InvitationService;
 import io.github.leobej.domain.service.IssueAssigneeService;
 import io.github.leobej.domain.service.IssueLinkService;
@@ -45,6 +47,7 @@ import io.github.leobej.domain.service.ProjectAuthorization;
 import io.github.leobej.domain.service.ProjectSetupService;
 import io.github.leobej.domain.service.ProjectService;
 import io.github.leobej.domain.service.SprintService;
+import io.github.leobej.domain.service.VerifiedEmailGate;
 import io.github.leobej.domain.service.WorkspaceAuthorization;
 import io.github.leobej.domain.service.WorkspaceService;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,9 +66,26 @@ public class DomainServiceConfig {
                                    RefreshTokenRepository refreshTokenRepository,
                                    PasswordHasher passwordHasher,
                                    AccessTokenIssuer accessTokenIssuer,
-                                   @Value("${simplira.jwt.refresh-token-expiry}") long refreshTokenExpirySeconds) {
+                                   @Value("${simplira.jwt.refresh-token-expiry}") long refreshTokenExpirySeconds,
+                                   EmailVerificationService emailVerificationService) {
         return new AuthService(userRepository, refreshTokenRepository, passwordHasher,
-                accessTokenIssuer, Duration.ofSeconds(refreshTokenExpirySeconds));
+                accessTokenIssuer, Duration.ofSeconds(refreshTokenExpirySeconds), emailVerificationService);
+    }
+
+    @Bean
+    public EmailVerificationService emailVerificationService(
+            EmailVerificationTokenRepository emailVerificationTokenRepository,
+            UserRepository userRepository,
+            EmailService emailService,
+            @Value("${simplira.auth.email-verification.expiry}") long verificationExpirySeconds) {
+        return new EmailVerificationService(emailVerificationTokenRepository, userRepository, emailService,
+                Duration.ofSeconds(verificationExpirySeconds));
+    }
+
+    @Bean
+    public VerifiedEmailGate verifiedEmailGate(UserRepository userRepository,
+                                               @Value("${simplira.auth.require-verified-email}") boolean enforced) {
+        return new VerifiedEmailGate(userRepository, enforced);
     }
 
     @Bean
@@ -96,9 +116,10 @@ public class DomainServiceConfig {
                                              UserRepository userRepository,
                                              WorkspaceAuthorization authorization,
                                              AssignmentRevoker assignmentRevoker,
+                                             VerifiedEmailGate verifiedEmailGate,
                                              AuditTrail auditTrail) {
         return new WorkspaceService(workspaceRepository, userWorkspaceRepository, userRepository,
-                authorization, assignmentRevoker, auditTrail);
+                authorization, assignmentRevoker, auditTrail, verifiedEmailGate);
     }
 
     @Bean
@@ -108,9 +129,11 @@ public class DomainServiceConfig {
                                                WorkspaceAuthorization authorization,
                                                EmailService emailService,
                                                @Value("${simplira.invitations.expiry}") long invitationExpirySeconds,
-                                               AuditTrail auditTrail) {
+                                               AuditTrail auditTrail,
+                                               VerifiedEmailGate verifiedEmailGate) {
         return new InvitationService(invitationRepository, userWorkspaceRepository, userRepository,
-                authorization, emailService, Duration.ofSeconds(invitationExpirySeconds), auditTrail);
+                authorization, emailService, Duration.ofSeconds(invitationExpirySeconds), auditTrail,
+                verifiedEmailGate);
     }
 
     @Bean

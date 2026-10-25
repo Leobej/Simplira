@@ -2,6 +2,8 @@ package io.github.leobej.application.api.auth;
 
 import io.github.leobej.application.api.auth.request.LoginRequest;
 import io.github.leobej.application.api.auth.request.RegisterRequest;
+import io.github.leobej.application.api.auth.request.ResendVerificationRequest;
+import io.github.leobej.application.api.auth.request.VerifyEmailRequest;
 import io.github.leobej.application.api.auth.response.AuthResponse;
 import io.github.leobej.application.api.auth.response.UserResponse;
 import io.github.leobej.application.shared.response.ApiResponse;
@@ -9,6 +11,7 @@ import io.github.leobej.domain.model.token.SessionContext;
 import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.AuthService.LoginResult;
+import io.github.leobej.domain.service.EmailVerificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -21,11 +24,28 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
     private final RefreshTokenCookie refreshTokenCookie;
 
-    public AuthController(AuthService authService, RefreshTokenCookie refreshTokenCookie) {
+    public AuthController(AuthService authService,
+                          EmailVerificationService emailVerificationService,
+                          RefreshTokenCookie refreshTokenCookie) {
         this.authService = authService;
+        this.emailVerificationService = emailVerificationService;
         this.refreshTokenCookie = refreshTokenCookie;
+    }
+
+    // 🌐 The token is the credential: whoever followed the link proved the address.
+    @PostMapping("/verify-email")
+    public ApiResponse<UserResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        return ApiResponse.success(UserResponse.from(emailVerificationService.verify(request.token())));
+    }
+
+    // 🌐 Always 200 with nothing in it: the same answer whether or not the address has an account.
+    @PostMapping("/resend-verification")
+    public ApiResponse<Void> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+        emailVerificationService.resend(request.email());
+        return ApiResponse.success(null);
     }
 
     @PostMapping("/register")
