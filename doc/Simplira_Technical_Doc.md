@@ -840,10 +840,24 @@ If a revoked token is used, all sessions for that user are terminated (theft det
    `email_verified = true`. Login itself may be allowed, but with reduced capability until verified.
 
 
-> **As built:** `email_verified` is dormant. Nothing writes it except invitation acceptance, and
-> nothing reads it — the gate above is *not* enforced anywhere yet, and cannot be until the
-> verification flow exists. Turning it on first would lock every existing account out of workspace
-> creation, since every row is currently `false`. Build the flow and enable the gate in one slice.
+> **As built (V26):** the flow and the gate landed together, as planned.
+> - Registering issues a token and emails the link; it goes out directly, not through the email
+>   outbox (§8), because the outbox would store in plain text what this table keeps only as a hash.
+> - `verify-email` answers with the user. Unknown, used and expired tokens are one error,
+>   `INVALID_VERIFICATION_TOKEN` (400), since the answer to all three is "request a new link".
+> - `resend-verification` deletes the user's unused tokens before issuing a new one, so only the
+>   newest link works. It answers 200 with no data for every address — unknown, unverified or
+>   already verified — and only actually sends for an unverified account.
+> - **The gate** (`VerifiedEmailGate`, `EMAIL_NOT_VERIFIED`, 403) covers creating a workspace and
+>   accepting an invitation sent to *another* address. Accepting one sent to your own address
+>   needs no prior verification — it *is* the proof, and verifies you (below). Logging in and
+>   working in workspaces you already belong to stay open.
+> - The gate is `simplira.auth.require-verified-email`, on by default. The test profile turns it
+>   off so suites about other things need not verify every account they create;
+>   `EmailVerificationFlowTest` runs with it on.
+> - **Existing accounts** created before V26 are unverified and are not backfilled: an address
+>   nobody proved should not be marked proved. They verify once through `resend-verification`.
+> - Used and expired tokens are purged nightly (§28).
 >
 > **Invitation acceptance verifies the address.** Following a link sent to an address proves
 > control of it, which is exactly what this flow proves — so accepting an invitation sets
@@ -1629,14 +1643,14 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V22__create_notification_preferences.sql   -- overrides only; no row means both channels on
 ├── V23__rename_issue_link_check_constraints.sql -- chk_ → ck_, matching the rest of the schema
 ├── V24__create_email_outbox.sql               -- notification emails, sent by a poller with retries
-└── V25__create_audit_log.sql                  -- append-only by trigger; jsonb snapshots
+├── V25__create_audit_log.sql                  -- append-only by trigger; jsonb snapshots
+└── V26__create_email_verification_tokens.sql  -- hashed, single-use, 24 h; resend replaces
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
 applied, so a slot held open for a table built later fails on every database that ran the
 higher number first. Email verification was originally penciled in as V3 and is a live example.
 
-    create_email_verification_tokens.sql
     create_attachments.sql
     add_indexes.sql
 ```
@@ -3849,9 +3863,21 @@ e.g. attachments/issue-uuid/abc123_screenshot.png
 ## 28. Scheduled Cleanup Jobs
 
 > **As built:** `@EnableScheduling` sits on `infrastructure/config/SchedulingConfig` rather than
-> the application class, and `infrastructure/scheduling/ScheduledJobs` calls
-> `NotificationService.purgeExpired()` instead of a repository directly. Only the notification
-> purge exists so far; the refresh-token purge and invitation expiry below are still to add.
+> the application class, and each job in `infrastructure/scheduling/ScheduledJobs` calls the
+> domain service that owns the rule rather than a repository directly:
+>
+> | Job | When | Calls |
+> |---|---|---|
+> | Purge expired notifications | daily 02:00 | `NotificationService.purgeExpired()` |
+> | Purge expired refresh tokens | daily 02:30 | `AuthService.purgeExpiredRefreshTokens()` |
+> | Purge used or expired verification tokens | daily 02:45 | `EmailVerificationService.purgeSpent()` |
+> | Expire outdated invitations | hourly | `InvitationService.expireOutdated()` |
+>
+> **The refresh-token purge deletes every expired token, revoked or not** — the query below keeps
+> revoked ones (`AND t.revokedAt IS NULL`), which would grow forever. An expired token is refused
+> whatever its state, so it no longer serves theft detection either. Times use `Instant`, not
+> `LocalDateTime`, like every other column (§4's timezone convention).
+>
 > The email outbox poller (§8) is a separate `EmailOutboxPoller`, so tests can switch it off
 > with `simplira.email.outbox.polling=false` and send queued email themselves.
 
