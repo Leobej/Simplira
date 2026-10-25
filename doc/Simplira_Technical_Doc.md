@@ -602,6 +602,28 @@ Attachment
 - deleted_by        UUID, FK → User, nullable
 ```
 
+> **As built (V27), with §25 and §27 applied:**
+> - **`file_key` instead of `file_url`** (§27): the bucket is private, and every read signs a
+>   fresh link valid for an hour, returned with its `urlExpiresAt`. The key is
+>   `attachments/{issueId}/{attachmentId}` — §27's `{uuid}_{originalFilename}` would put whatever
+>   the uploader typed into a storage path. The original name is kept separately, reduced to its
+>   last path segment (`../../shot.png` → `shot.png`), and served as the download name.
+> - **The type comes from the bytes** (§25), by Tika's magic-byte detection; the Content-Type
+>   header and the extension are ignored. Allowed: PNG, JPEG, GIF and WebP. **SVG is refused**
+>   even though it is an image: it is XML that can carry script, and opened from a link it runs.
+>   Errors: `INVALID_FILE_TYPE` (415), `FILE_TOO_LARGE` (413, over 10 MB, whether the service or
+>   the servlet's multipart limit catches it), `EMPTY_FILE` (400).
+> - **Deleting** is for the uploader or a workspace admin, like comments. The row is
+>   soft-deleted for the record, but **the bytes are deleted from the bucket at once** — someone
+>   removing a screenshot with a password in it means it to be gone, not hidden — so links handed
+>   out earlier stop working too.
+> - Uploads and deletions are in the issue's history (audit entity `ATTACHMENT`) and reach open
+>   boards like any other change.
+> - **Storage** is any S3-compatible store through the AWS SDK: AWS S3 with no endpoint set,
+>   Cloudflare R2 or a local S3Mock with one (`simplira.storage.*`). Locally that is `adobe/s3mock`
+>   in `docker/docker-compose.yml` — MinIO no longer publishes its images. The SDK's per-request
+>   checksums are limited to where S3 requires them, which several S3-compatible stores need.
+
 ### Invitation
 
 ```sql
@@ -1142,6 +1164,9 @@ POST   /api/v1/issues/{issueId}/attachments                         👤 Upload 
 DELETE /api/v1/attachments/{attachmentId}                           👤 Delete (soft)
 ```
 
+> Upload is `multipart/form-data` with the image in a part named `file`. Delete is the uploader's
+> or a workspace admin's; it soft-deletes the row and deletes the bytes. See Attachment in §4.
+
 ### Notification Endpoints
 
 ```
@@ -1659,14 +1684,14 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V23__rename_issue_link_check_constraints.sql -- chk_ → ck_, matching the rest of the schema
 ├── V24__create_email_outbox.sql               -- notification emails, sent by a poller with retries
 ├── V25__create_audit_log.sql                  -- append-only by trigger; jsonb snapshots
-└── V26__create_email_verification_tokens.sql  -- hashed, single-use, 24 h; resend replaces
+├── V26__create_email_verification_tokens.sql  -- hashed, single-use, 24 h; resend replaces
+└── V27__create_attachments.sql                -- file_key, not file_url; ATTACHMENT in the audit log
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
 applied, so a slot held open for a table built later fails on every database that ran the
 higher number first. Email verification was originally penciled in as V3 and is a live example.
 
-    create_attachments.sql
     add_indexes.sql
 ```
 
