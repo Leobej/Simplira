@@ -28,6 +28,8 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Auth 7 | Logout | 204 — revokes the session; Refresh afterwards gives 401 |
 | Auth 8 | Register teammate | 201 the first time, 409 after — both pass |
 | Auth 9 | Login teammate | 200 — captures `teammateToken` and `memberUserId` |
+| Auth 10 | Verify email | 200 — needs `verificationToken` pasted from the log; unlocks creating workspaces |
+| Auth 11 | Resend verification | 200 — always, whoever the address belongs to |
 | Users 1 | Get me | 200 — inherits the collection's bearer auth |
 | Users 2 | Get me - no token | 401 `UNAUTHENTICATED` |
 | Workspaces 1 | Create workspace | 201 — captures `workspaceId`; slug derived from the name |
@@ -112,9 +114,11 @@ someone to invite, assign and be notified by. Auth 8 and 9 create it and capture
 and `memberUserId`. The few requests that act as the teammate (Invitations 3, Notifications 1)
 say so with their own bearer auth; nothing else changes accounts.
 
-On a fresh database: Register, Login, Register teammate and Login teammate, then the rest in
-order. Accepting the invitation still needs `invitationToken` pasted from the application log —
-the token exists only in the email, by design.
+On a fresh database: Register, Login, Register teammate and Login teammate, then Verify email,
+then the rest in order. Two tokens have to be pasted from the application log, because each
+exists only in an email, by design: `verificationToken` (the `[stub email] verify email` line,
+needed before you can create a workspace) and `invitationToken` (for Accept invitation). An
+account created before verification existed has no link yet — run Resend verification first.
 
 Each request carries an `assert` block, so **Run Folder** on `Auth` or the whole collection
 works as a smoke test rather than something you have to eyeball.

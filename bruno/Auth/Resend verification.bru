@@ -1,0 +1,31 @@
+meta {
+  name: Resend verification
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/resend-verification
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{userEmail}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Always 200 with no data, whether the address is unknown, unverified or already verified - so it
+  cannot be used to find out who has an account. Only an unverified account actually gets a new
+  link, and it replaces every earlier one.
+}
