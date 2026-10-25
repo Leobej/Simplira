@@ -1674,12 +1674,8 @@ infrastructure/
 │   ├── StorageService.java     ← interface
 │   └── S3StorageService.java   ← implementation
 ├── email/
-│   ├── LoggingEmailService.java ← stub: logs the link (see §25)
-│   ├── SmtpEmailService.java   ← implementation
-│   └── template/
-│       ├── invitation.html
-│       ├── password-reset.html
-│       └── notification.html
+│   ├── SmtpEmailService.java   ← any provider over SMTP (see §25)
+│   └── EmailTemplates.java     ← text + HTML for each email, in code rather than template files
 ├── config/
 │   └── DomainServiceConfig.java         ← beans for the framework-free domain services
 └── security/
@@ -3778,15 +3774,29 @@ Useful for sharing links. Resolves identifier to UUID internally.
 > infrastructure. Implementations stay in `infrastructure/email` and are where link building and
 > provider credentials live, so the domain passes a bare token and never knows a URL.
 >
-> **The queue is deliberately not built yet.** The current sender is `LoggingEmailService`, a stub
-> that writes the link to the log. A stub blocks on nothing, so putting a queue, a consumer and a
-> dead-letter queue in front of it would add infrastructure that cannot be meaningfully tested and
-> would make local development depend on a running broker. Publisher, consumer and DLQ arrive
-> together with real provider credentials — one class swap, since callers only see the port.
+> **The sender is `SmtpEmailService`, over plain SMTP** — every provider offers it, Mailgun below
+> included, so choosing one is the `SMTP_*` and `MAIL_FROM` settings, not code. Each email goes as
+> plain text and HTML, built in `EmailTemplates`; anything a user typed is HTML-escaped, and line
+> breaks are taken out of subjects so a name cannot start a header of its own. Links point at the
+> frontend (`simplira.app.base-url`), whose page posts the token back. The old
+> `LoggingEmailService`, which wrote raw tokens to the log, is gone.
 >
-> When that happens, decide what a broker outage means for the request: creating an invitation
-> should *not* fail because mail is queued elsewhere. Persist it, log the failure, and let resend
-> be the recovery path.
+> **Two failure policies, by design:**
+> - *Notification* emails go through the outbox (§8) and throw on failure, which is what makes
+>   the outbox retry them.
+> - *Token* emails (verification, invitation, password reset) are sent directly — an outbox would
+>   store the raw token — and a failure is logged without the message and swallowed, as planned
+>   here: the request still succeeds, and the recipient asks again (resend verification, forgot
+>   password again, or an admin re-invites).
+>
+> A mail outage does not turn `/actuator/health` red (`management.health.mail.enabled=false`).
+> Locally, `mailpit` in `docker/docker-compose.yml` catches everything (inbox at
+> `localhost:8025`); tests use `RecordingEmailService` everywhere, and `SmtpEmailServiceTest`
+> checks the real sender against a Mailpit container.
+>
+> **To go live:** pick a provider, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`,
+> `SMTP_PASSWORD` and `MAIL_FROM`, and add the SPF and DKIM records the provider gives you to the
+> sending domain's DNS — without them most inboxes will treat the mail as spam.
 
 ### Choice
 
