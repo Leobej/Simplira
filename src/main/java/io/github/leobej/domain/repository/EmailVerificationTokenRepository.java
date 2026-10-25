@@ -15,6 +15,9 @@ public interface EmailVerificationTokenRepository {
     // A resend replaces every link sent before it, so only the newest one works.
     void deleteUnconsumedForUser(UUID userId);
 
+    // The per-address cooldown: was a link sent to this user since then?
+    boolean existsCreatedSince(UUID userId, Instant since);
+
     // Used or expired: neither can ever verify anything again.
     int deleteSpent(Instant now);
 }

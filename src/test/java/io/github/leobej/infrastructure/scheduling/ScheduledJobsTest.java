@@ -3,6 +3,7 @@ package io.github.leobej.infrastructure.scheduling;
 import io.github.leobej.domain.model.invitation.Invitation;
 import io.github.leobej.domain.model.invitation.InvitationStatus;
 import io.github.leobej.domain.model.token.RefreshToken;
+import io.github.leobej.domain.model.token.RevocationReason;
 import io.github.leobej.domain.model.user.EmailVerificationToken;
 import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.model.workspace.Workspace;
@@ -48,9 +49,9 @@ class ScheduledJobsTest extends PostgresTestBase {
         User user = newUser();
         Instant lastWeek = Instant.now().minus(Duration.ofDays(7));
         RefreshToken expired = refreshTokens.save(new RefreshToken(UUID.randomUUID(), user.getId(), hash(),
-                null, null, lastWeek, lastWeek.minus(Duration.ofDays(30)), null));
+                null, null, lastWeek, lastWeek.minus(Duration.ofDays(30)), null, null));
         RefreshToken expiredAndRevoked = refreshTokens.save(new RefreshToken(UUID.randomUUID(), user.getId(), hash(),
-                null, null, lastWeek, lastWeek.minus(Duration.ofDays(30)), lastWeek));
+                null, null, lastWeek, lastWeek.minus(Duration.ofDays(30)), lastWeek, RevocationReason.ROTATED));
         RefreshToken live = refreshTokens.save(RefreshToken.issue(user.getId(), hash(), null, null, Duration.ofDays(30)));
 
         jobs.purgeExpiredRefreshTokens();

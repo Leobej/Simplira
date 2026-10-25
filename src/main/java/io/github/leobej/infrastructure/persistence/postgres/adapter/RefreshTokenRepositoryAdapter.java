@@ -1,6 +1,7 @@
 package io.github.leobej.infrastructure.persistence.postgres.adapter;
 
 import io.github.leobej.domain.model.token.RefreshToken;
+import io.github.leobej.domain.model.token.RevocationReason;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.infrastructure.persistence.postgres.entity.RefreshTokenEntity;
 import io.github.leobej.infrastructure.persistence.postgres.jpa.JpaRefreshTokenRepository;
@@ -38,7 +39,7 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
     @Override
     @Transactional
     public void revokeAllForUser(UUID userId) {
-        jpaRepository.revokeAllForUser(userId, Instant.now());
+        jpaRepository.revokeAllForUser(userId, Instant.now(), RevocationReason.SIGNED_OUT_EVERYWHERE);
     }
 
     @Override

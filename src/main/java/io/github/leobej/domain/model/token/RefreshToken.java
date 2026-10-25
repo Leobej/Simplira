@@ -18,6 +18,7 @@ public class RefreshToken {
     private final Instant expiresAt;
     private final Instant createdAt;
     private Instant revokedAt;        // null = still valid
+    private RevocationReason revokedReason;
 
     public static RefreshToken issue(UUID userId,
                                      String tokenHash,
@@ -33,6 +34,7 @@ public class RefreshToken {
                 ipAddress,
                 now.plus(lifetime),
                 now,
+                null,
                 null
         );
     }
@@ -45,10 +47,17 @@ public class RefreshToken {
         return Instant.now().isAfter(expiresAt);
     }
 
-    // Rotation revokes the old token, so the first revoke wins and later ones are no-ops.
-    public void revoke() {
+    // A rotated token presented again means someone kept a copy (§6). Any other revoked token is
+    // just a device that was signed out from somewhere else.
+    public boolean wasRotated() {
+        return revokedReason == RevocationReason.ROTATED;
+    }
+
+    // The first revoke wins and later ones are no-ops, so the reason recorded is the real one.
+    public void revoke(RevocationReason reason) {
         if (revokedAt == null) {
             this.revokedAt = Instant.now();
+            this.revokedReason = reason;
         }
     }
 }

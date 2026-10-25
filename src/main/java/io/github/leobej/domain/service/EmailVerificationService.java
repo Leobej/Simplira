@@ -22,15 +22,18 @@ public class EmailVerificationService {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final Duration tokenLifetime;
+    private final Duration cooldown;
 
     public EmailVerificationService(EmailVerificationTokenRepository tokenRepository,
                                     UserRepository userRepository,
                                     EmailService emailService,
-                                    Duration tokenLifetime) {
+                                    Duration tokenLifetime,
+                                    Duration cooldown) {
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
         this.emailService = emailService;
         this.tokenLifetime = tokenLifetime;
+        this.cooldown = cooldown;
     }
 
     // On registration, and on every resend.
@@ -59,11 +62,13 @@ public class EmailVerificationService {
         return user;
     }
 
-    // Says nothing either way: an unknown address, an already-verified one and a fresh link all
-    // look the same from outside, so this cannot be used to find out who has an account.
+    // Says nothing either way: an unknown address, an already-verified one, a cooldown and a fresh
+    // link all look the same from outside, so this cannot be used to find out who has an account.
+    // The cooldown is per address, so it cannot be used to flood one inbox either.
     public void resend(String email) {
         userRepository.findByEmail(User.normalizeEmail(email))
                 .filter(user -> !user.isEmailVerified())
+                .filter(user -> !tokenRepository.existsCreatedSince(user.getId(), Instant.now().minus(cooldown)))
                 .ifPresent(user -> {
                     tokenRepository.deleteUnconsumedForUser(user.getId());
                     sendLink(user);

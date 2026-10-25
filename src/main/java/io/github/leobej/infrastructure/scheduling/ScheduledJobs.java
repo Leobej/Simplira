@@ -4,6 +4,7 @@ import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.EmailVerificationService;
 import io.github.leobej.domain.service.InvitationService;
 import io.github.leobej.domain.service.NotificationService;
+import io.github.leobej.domain.service.PasswordResetService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,15 +21,18 @@ public class ScheduledJobs {
     private final AuthService authService;
     private final InvitationService invitationService;
     private final EmailVerificationService emailVerificationService;
+    private final PasswordResetService passwordResetService;
 
     public ScheduledJobs(NotificationService notificationService,
                          AuthService authService,
                          InvitationService invitationService,
-                         EmailVerificationService emailVerificationService) {
+                         EmailVerificationService emailVerificationService,
+                         PasswordResetService passwordResetService) {
         this.notificationService = notificationService;
         this.authService = authService;
         this.invitationService = invitationService;
         this.emailVerificationService = emailVerificationService;
+        this.passwordResetService = passwordResetService;
     }
 
     // Daily at 02:00.
@@ -50,6 +54,13 @@ public class ScheduledJobs {
     public void purgeSpentVerificationTokens() {
         int deleted = emailVerificationService.purgeSpent();
         log.info("Purged used or expired verification tokens: count={}", deleted);
+    }
+
+    // Daily at 02:50. Also newer than §28.
+    @Scheduled(cron = "0 50 2 * * *")
+    public void purgeSpentResetTokens() {
+        int deleted = passwordResetService.purgeSpent();
+        log.info("Purged used or expired password reset tokens: count={}", deleted);
     }
 
     // Hourly, on the hour.

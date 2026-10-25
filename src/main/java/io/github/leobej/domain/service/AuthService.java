@@ -1,6 +1,7 @@
 package io.github.leobej.domain.service;
 
 import io.github.leobej.domain.model.token.RefreshToken;
+import io.github.leobej.domain.model.token.RevocationReason;
 import io.github.leobej.domain.model.token.SessionContext;
 import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.port.AccessTokenIssuer;
@@ -9,11 +10,13 @@ import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.repository.UserRepository;
 import io.github.leobej.shared.exception.EmailAlreadyExistsException;
 import io.github.leobej.shared.exception.InvalidCredentialsException;
+import io.github.leobej.shared.exception.InvalidCurrentPasswordException;
 import io.github.leobej.shared.exception.InvalidRefreshTokenException;
 import io.github.leobej.shared.util.TokenGenerator;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 
 // Pure domain: no Spring annotations, no infrastructure imports.
 // Wired as a bean by infrastructure.config.DomainServiceConfig.
@@ -71,8 +74,12 @@ public class AuthService {
 
         if (stored.isRevoked()) {
             // Rotation means a used token is never presented again by an honest client, so a
-            // replay says someone else kept a copy. Drop every session the user has (§6).
-            refreshTokenRepository.revokeAllForUser(stored.getUserId());
+            // replay of a rotated one says someone else kept a copy: drop every session (§6).
+            // A token ended by logout or a password change is just another device catching up,
+            // and taking the new session down with it would sign out the person who did it.
+            if (stored.wasRotated()) {
+                refreshTokenRepository.revokeAllForUser(stored.getUserId());
+            }
             throw new InvalidRefreshTokenException();
         }
         if (stored.isExpired()) {
@@ -82,7 +89,7 @@ public class AuthService {
         User user = userRepository.findById(stored.getUserId())
                 .orElseThrow(InvalidRefreshTokenException::new);
 
-        stored.revoke();                 // every refresh token is usable exactly once
+        stored.revoke(RevocationReason.ROTATED);   // every refresh token is usable exactly once
         refreshTokenRepository.save(stored);
 
         return issueSession(user, session);
@@ -94,9 +101,22 @@ public class AuthService {
         }
         refreshTokenRepository.findByTokenHash(TokenGenerator.hash(rawRefreshToken))
                 .ifPresent(token -> {
-                    token.revoke();
+                    token.revoke(RevocationReason.LOGGED_OUT);
                     refreshTokenRepository.save(token);
                 });
+    }
+
+    // Every session ends, this one included - and this one is handed a fresh session at once, so
+    // the person changing their password stays signed in where they did it and nowhere else.
+    public LoginResult changePassword(UUID userId, String currentPassword, String newPassword, SessionContext session) {
+        User user = userRepository.findById(userId).orElseThrow(InvalidCredentialsException::new);
+        if (!passwordHasher.matches(currentPassword, user.getPassword())) {
+            throw new InvalidCurrentPasswordException();
+        }
+        user.changePassword(passwordHasher.hash(newPassword));
+        User saved = userRepository.save(user);
+        refreshTokenRepository.revokeAllForUser(userId);
+        return issueSession(saved, session);
     }
 
     // §28. Every login and refresh adds a row; without this the table only grows.

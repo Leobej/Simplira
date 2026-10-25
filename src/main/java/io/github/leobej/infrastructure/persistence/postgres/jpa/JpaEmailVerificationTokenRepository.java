@@ -14,6 +14,8 @@ public interface JpaEmailVerificationTokenRepository extends JpaRepository<Email
 
     Optional<EmailVerificationTokenEntity> findByTokenHash(String tokenHash);
 
+    boolean existsByUserIdAndCreatedAtAfter(UUID userId, Instant since);
+
     @Modifying
     @Query("delete from EmailVerificationTokenEntity t where t.userId = :userId and t.consumedAt is null")
     int deleteUnconsumedForUser(@Param("userId") UUID userId);

@@ -43,6 +43,13 @@ public class User {
         this.touch();
     }
 
+    // Takes the hash: hashing is the PasswordHasher's job, and the domain never sees a raw password
+    // outside the service that receives it.
+    public void changePassword(String newHashedPassword) {
+        this.password = newHashedPassword;
+        touch();
+    }
+
     public void changeName(String newName) {
         this.fullName = newName;
         this.touch();

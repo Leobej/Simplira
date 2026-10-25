@@ -27,6 +27,7 @@ public class RecordingEmailConfig {
 
         private final Map<String, String> invitationTokens = new ConcurrentHashMap<>();
         private final Map<String, String> verificationTokens = new ConcurrentHashMap<>();
+        private final Map<String, String> resetTokens = new ConcurrentHashMap<>();
         private final Map<String, List<String>> notificationSubjects = new ConcurrentHashMap<>();
 
         public String invitationTokenFor(String email) {
@@ -44,7 +45,11 @@ public class RecordingEmailConfig {
 
         @Override
         public void sendPasswordReset(String to, String resetToken) {
-            // nothing to record yet
+            resetTokens.put(to.toLowerCase(Locale.ROOT), resetToken);
+        }
+
+        public String resetTokenFor(String email) {
+            return resetTokens.get(email.toLowerCase(Locale.ROOT));
         }
 
         // The latest link sent to an address, the way someone would click the newest email.

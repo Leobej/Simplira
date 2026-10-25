@@ -24,6 +24,7 @@ import io.github.leobej.domain.repository.IssueTypeRepository;
 import io.github.leobej.domain.repository.LabelRepository;
 import io.github.leobej.domain.repository.NotificationPreferenceRepository;
 import io.github.leobej.domain.repository.NotificationRepository;
+import io.github.leobej.domain.repository.PasswordResetTokenRepository;
 import io.github.leobej.domain.repository.ProjectMemberRepository;
 import io.github.leobej.domain.repository.ProjectRepository;
 import io.github.leobej.domain.repository.SprintRepository;
@@ -48,10 +49,12 @@ import io.github.leobej.domain.service.IssueTypeService;
 import io.github.leobej.domain.service.LabelService;
 import io.github.leobej.domain.service.NotificationService;
 import io.github.leobej.domain.service.Notifier;
+import io.github.leobej.domain.service.PasswordResetService;
 import io.github.leobej.domain.service.ProjectAuthorization;
 import io.github.leobej.domain.service.ProjectSetupService;
 import io.github.leobej.domain.service.ProjectService;
 import io.github.leobej.domain.service.SprintService;
+import io.github.leobej.domain.service.UserProfileService;
 import io.github.leobej.domain.service.VerifiedEmailGate;
 import io.github.leobej.domain.service.WorkspaceAuthorization;
 import io.github.leobej.domain.service.WorkspaceService;
@@ -82,9 +85,29 @@ public class DomainServiceConfig {
             EmailVerificationTokenRepository emailVerificationTokenRepository,
             UserRepository userRepository,
             EmailService emailService,
-            @Value("${simplira.auth.email-verification.expiry}") long verificationExpirySeconds) {
+            @Value("${simplira.auth.email-verification.expiry}") long verificationExpirySeconds,
+            @Value("${simplira.auth.email-cooldown}") long cooldownSeconds) {
         return new EmailVerificationService(emailVerificationTokenRepository, userRepository, emailService,
-                Duration.ofSeconds(verificationExpirySeconds));
+                Duration.ofSeconds(verificationExpirySeconds), Duration.ofSeconds(cooldownSeconds));
+    }
+
+    @Bean
+    public PasswordResetService passwordResetService(
+            PasswordResetTokenRepository passwordResetTokenRepository,
+            UserRepository userRepository,
+            RefreshTokenRepository refreshTokenRepository,
+            PasswordHasher passwordHasher,
+            EmailService emailService,
+            @Value("${simplira.auth.password-reset.expiry}") long resetExpirySeconds,
+            @Value("${simplira.auth.email-cooldown}") long cooldownSeconds) {
+        return new PasswordResetService(passwordResetTokenRepository, userRepository, refreshTokenRepository,
+                passwordHasher, emailService, Duration.ofSeconds(resetExpirySeconds),
+                Duration.ofSeconds(cooldownSeconds));
+    }
+
+    @Bean
+    public UserProfileService userProfileService(UserRepository userRepository) {
+        return new UserProfileService(userRepository);
     }
 
     @Bean

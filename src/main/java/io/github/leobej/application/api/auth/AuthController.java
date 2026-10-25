@@ -1,8 +1,10 @@
 package io.github.leobej.application.api.auth;
 
+import io.github.leobej.application.api.auth.request.ForgotPasswordRequest;
 import io.github.leobej.application.api.auth.request.LoginRequest;
 import io.github.leobej.application.api.auth.request.RegisterRequest;
 import io.github.leobej.application.api.auth.request.ResendVerificationRequest;
+import io.github.leobej.application.api.auth.request.ResetPasswordRequest;
 import io.github.leobej.application.api.auth.request.VerifyEmailRequest;
 import io.github.leobej.application.api.auth.response.AuthResponse;
 import io.github.leobej.application.api.auth.response.UserResponse;
@@ -12,6 +14,7 @@ import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.AuthService.LoginResult;
 import io.github.leobej.domain.service.EmailVerificationService;
+import io.github.leobej.domain.service.PasswordResetService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -25,14 +28,31 @@ public class AuthController {
 
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
+    private final PasswordResetService passwordResetService;
     private final RefreshTokenCookie refreshTokenCookie;
 
     public AuthController(AuthService authService,
                           EmailVerificationService emailVerificationService,
+                          PasswordResetService passwordResetService,
                           RefreshTokenCookie refreshTokenCookie) {
         this.authService = authService;
         this.emailVerificationService = emailVerificationService;
+        this.passwordResetService = passwordResetService;
         this.refreshTokenCookie = refreshTokenCookie;
+    }
+
+    // 🌐 Always 200 with nothing in it (§6): the same answer whether or not the address has an account.
+    @PostMapping("/forgot-password")
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestReset(request.email());
+        return ApiResponse.success(null);
+    }
+
+    // 🌐 The emailed token is the credential. Every session ends, so the client goes to the login page.
+    @PostMapping("/reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request.token(), request.newPassword());
     }
 
     // 🌐 The token is the credential: whoever followed the link proved the address.

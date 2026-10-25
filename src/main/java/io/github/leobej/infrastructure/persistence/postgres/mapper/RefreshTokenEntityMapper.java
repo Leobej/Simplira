@@ -17,7 +17,8 @@ public final class RefreshTokenEntityMapper {
                 entity.getIpAddress(),
                 entity.getExpiresAt(),
                 entity.getCreatedAt(),
-                entity.getRevokedAt()
+                entity.getRevokedAt(),
+                entity.getRevokedReason()
         );
     }
 
@@ -32,6 +33,7 @@ public final class RefreshTokenEntityMapper {
         entity.setExpiresAt(token.getExpiresAt());
         entity.setCreatedAt(token.getCreatedAt());
         entity.setRevokedAt(token.getRevokedAt());
+        entity.setRevokedReason(token.getRevokedReason());
         if (isNew) {
             entity.markNew();
         }

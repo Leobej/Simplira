@@ -1,5 +1,6 @@
 package io.github.leobej.infrastructure.persistence.postgres.jpa;
 
+import io.github.leobej.domain.model.token.RevocationReason;
 import io.github.leobej.infrastructure.persistence.postgres.entity.RefreshTokenEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -16,9 +17,10 @@ public interface JpaRefreshTokenRepository extends JpaRepository<RefreshTokenEnt
 
     // One statement rather than loading every row: a user may have many live sessions.
     @Modifying(clearAutomatically = true)
-    @Query("update RefreshTokenEntity t set t.revokedAt = :revokedAt "
+    @Query("update RefreshTokenEntity t set t.revokedAt = :revokedAt, t.revokedReason = :reason "
             + "where t.userId = :userId and t.revokedAt is null")
-    int revokeAllForUser(@Param("userId") UUID userId, @Param("revokedAt") Instant revokedAt);
+    int revokeAllForUser(@Param("userId") UUID userId, @Param("revokedAt") Instant revokedAt,
+                         @Param("reason") RevocationReason reason);
 
     @Modifying
     @Query("delete from RefreshTokenEntity t where t.expiresAt < :now")

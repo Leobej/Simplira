@@ -13,6 +13,8 @@ import io.github.leobej.shared.exception.IssueLinkNotFoundException;
 import io.github.leobej.shared.exception.AttachmentNotFoundException;
 import io.github.leobej.shared.exception.EmailNotVerifiedException;
 import io.github.leobej.shared.exception.InvalidAttachmentException;
+import io.github.leobej.shared.exception.InvalidCurrentPasswordException;
+import io.github.leobej.shared.exception.InvalidResetTokenException;
 import io.github.leobej.shared.exception.InvalidVerificationTokenException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.NotificationNotFoundException;
@@ -260,6 +262,19 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleInvalidVerificationToken(InvalidVerificationTokenException ex) {
         return ApiResponse.failure(ErrorResponse.of("INVALID_VERIFICATION_TOKEN", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidResetTokenException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidResetToken(InvalidResetTokenException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_RESET_TOKEN", ex.getMessage()));
+    }
+
+    // 400, not 401: the session is fine, the field is wrong - and a 401 would make a client log out.
+    @ExceptionHandler(InvalidCurrentPasswordException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidCurrentPassword(InvalidCurrentPasswordException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_CURRENT_PASSWORD", ex.getMessage()));
     }
 
     // 403, not 401: the caller is authenticated, just not yet allowed this.

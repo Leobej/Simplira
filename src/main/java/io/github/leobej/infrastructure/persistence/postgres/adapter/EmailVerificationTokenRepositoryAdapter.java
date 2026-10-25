@@ -48,6 +48,11 @@ public class EmailVerificationTokenRepositoryAdapter implements EmailVerificatio
     }
 
     @Override
+    public boolean existsCreatedSince(UUID userId, Instant since) {
+        return jpaRepository.existsByUserIdAndCreatedAtAfter(userId, since);
+    }
+
+    @Override
     @Transactional
     public int deleteSpent(Instant now) {
         return jpaRepository.deleteSpent(now);

@@ -1,5 +1,6 @@
 package io.github.leobej.infrastructure.persistence.postgres.entity;
 
+import io.github.leobej.domain.model.token.RevocationReason;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,6 +40,10 @@ public class RefreshTokenEntity implements Persistable<UUID> {
 
     @Column(name = "revoked_at")
     private Instant revokedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "revoked_reason")
+    private RevocationReason revokedReason;
 
     @Transient
     private boolean isNew = false;

@@ -41,7 +41,10 @@ public class SecurityConfig {
                                 // §6: the emailed token is verify-email's credential, and resend
                                 // gives the same answer for every address, so neither needs a session.
                                 "/api/v1/auth/verify-email",
-                                "/api/v1/auth/resend-verification").permitAll()
+                                "/api/v1/auth/resend-verification",
+                                // §6: the same reasoning, for the reset link.
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password").permitAll()
                         // The container HEALTHCHECK curls this with no credentials.
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         // The WebSocket handshake: a browser cannot attach a bearer token to it, so
