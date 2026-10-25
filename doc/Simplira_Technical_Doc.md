@@ -1253,6 +1253,30 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 
 > Charts return pre-aggregated data. Backend does the heavy lifting, not the frontend.
 
+> **As built:**
+> - **Issues, not points** — the schema has no estimates — and "done" is the DONE status
+>   *category*, never a status name (§33). Days are UTC days.
+> - **History comes from the audit log** (§4), which already records every status change and
+>   sprint move with its time, so charts need no snapshot tables and no nightly job. The cost:
+>   they only know what happened since the log existed (V25); an issue with no history shows as
+>   it is now. Status migrations from deleting a status (§33) are not audited, so the flow can
+>   lag those until the issue next changes status. Deleted issues drop out of every chart.
+> - **Burndown** `{ total, days: [{ date, remaining, completed, ideal }] }`: the scope is the
+>   sprint's issues *plus those its close carried out* (the `MOVED … SPRINT_CLOSED` entries) — they
+>   were part of the commitment, so a closed sprint's burndown does not shrink after the fact.
+>   `remaining` is null for days still to come, so a client draws the ideal line across the
+>   sprint and the actual one only up to today.
+> - **Velocity** `{ sprints: [{ committed, completed, … }], averageCompleted }`: the last
+>   `?sprints=` (10, at most 50) completed sprints, oldest first. `completed` counts the issues
+>   finished in the sprint — they stay attached to it (§29) — and `committed` adds what was
+>   carried over, from the `SPRINT_CLOSED` entry's `carriedOver`. A sprint closed before the log
+>   existed shows committed equal to completed.
+> - **Cumulative flow** `{ from, to, days: [{ date, todo, inProgress, done }] }`: `?from=&to=`
+>   (ISO dates, inclusive), default the last 30 days, at most 180 (`INVALID_DATE_RANGE`, 400). Each
+>   day counts the issues that existed by its end, by the category they were in at its end.
+> - Access: anyone who can see the project (§6); a burndown for an invisible sprint is
+>   `SPRINT_NOT_FOUND`.
+
 ### Endpoint Count
 
 > **Canonical endpoint count — single source of truth.** This table already includes every
