@@ -868,7 +868,7 @@ If a revoked token is used, all sessions for that user are terminated (theft det
 > **Both public email-sending endpoints have a per-address cooldown** (`simplira.auth.email-cooldown`,
 > 60 s): `forgot-password` and `resend-verification` send nothing to an address that was sent a
 > link within it, and answer exactly as they would otherwise. That stops one inbox being flooded;
-> it is not an IP-level rate limit, which is still to add.
+> it is not an IP-level rate limit — that is `RateLimitFilter` (§17).
 
 ### Email Verification Flow
 
@@ -3219,6 +3219,35 @@ Bucket bucket = Bucket.builder()
     .build();
 ```
 
+> **As built:** `infrastructure/web/RateLimitFilter`, a servlet filter ahead of Spring Security
+> (a flood is turned away before any password is hashed), with a small in-memory token bucket
+> (`RateLimiter`) instead of Bucket4j — forty lines, no dependency, refilling evenly rather than
+> all at once at the end of the interval. Per client IP, per endpoint, `POST` only:
+>
+> | Endpoint | Limit |
+> |---|---|
+> | `login` | 10 a minute |
+> | `refresh` | 60 a minute |
+> | `register` | 10 an hour |
+> | `forgot-password`, `resend-verification` | 5 per 15 minutes |
+> | `reset-password` | 10 per 15 minutes |
+> | `verify-email` | 20 per 15 minutes |
+>
+> Over the limit is `429 RATE_LIMITED` in the usual envelope, with `Retry-After` in seconds. Each
+> endpoint has its own budget, so being shut out of one does not lock anyone out of login. Idle
+> buckets are dropped every 10 minutes. Together with the per-*address* email cooldown (§6) this
+> covers both a flood from one machine and many machines aiming at one inbox.
+>
+> - **Behind a proxy or load balancer**, set `FORWARD_HEADERS_STRATEGY=NATIVE` so the client's
+>   address is used rather than the proxy's — otherwise every user shares one bucket. Only there:
+>   it makes the app trust `X-Forwarded-For`, which anyone on the open internet can set.
+> - **One instance only.** The buckets live in memory; several instances would each allow the
+>   full rate. A shared store (Redis) is the step for scaling out.
+> - Authenticated endpoints are not limited: their callers are known, and a flood from an account
+>   is a different problem.
+> - The test profile switches the filter off (`simplira.rate-limit.enabled=false`) — every suite
+>   logs in from 127.0.0.1 — and `RateLimitFilterTest` covers it with a hand-moved clock.
+
 **Input validation** — always at controller boundary:
 
 ```java
@@ -3289,10 +3318,10 @@ add_header Content-Security-Policy
 | Item | Layer | Priority |
 |---|---|---|
 | CORS configured for production domain | Backend | High |
-| Rate limiting on /auth/* endpoints | Backend | High |
+| Rate limiting on /auth/* endpoints | Backend | High — ✅ built (`RateLimitFilter`) |
 | Input validation on all request bodies | Backend | High |
-| File type validated with Tika | Backend | High |
-| No sensitive data in logs | Backend | High |
+| File type validated with Tika | Backend | High — ✅ built (attachments, avatars) |
+| No sensitive data in logs | Backend | High — ✅ the token-logging email stub is gone |
 | Access token in memory only | Frontend | High |
 | Refresh token in HttpOnly cookie | Frontend | High |
 | User content sanitized with DOMPurify | Frontend | High |
