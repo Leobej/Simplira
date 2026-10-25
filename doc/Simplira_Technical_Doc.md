@@ -843,12 +843,32 @@ User ──< NotificationPreference >── Workspace
 Every refresh generates a new refresh token. The old one is immediately revoked.
 If a revoked token is used, all sessions for that user are terminated (theft detection).
 
+> **As built (V29): only a *rotated* token triggers theft detection.** Each revocation records
+> why — `ROTATED`, `LOGGED_OUT` or `SIGNED_OUT_EVERYWHERE` (a password change or reset, or theft
+> detection itself). An honest client never sends a rotated token twice, so its reuse still ends
+> every session. But after a password change every other device still holds its old token and
+> will try it once on its next refresh; treating that as theft would sign out the person on the
+> device they just changed it on. Those get a plain 401. Rows revoked before V29 were backfilled
+> as `ROTATED`, which is how they were treated until then.
+
 ### Password Reset Flow
 
 1. `POST /auth/forgot-password` — generate secure token, store hash, send email
 2. Always return 200 even if email not found (prevents user enumeration)
 3. `POST /auth/reset-password` — validate token, hash new password, revoke ALL refresh tokens
 4. Revoking all refresh tokens forces re-login everywhere (security on compromise)
+
+> **As built (V28):** `password_reset_tokens` has the same shape as the verification tokens —
+> hashed, single-use — but lives **one hour**: it can set a password. A new request replaces the
+> user's earlier links; a successful reset retires them all. Unknown, used and expired tokens are
+> one error, `INVALID_RESET_TOKEN` (400). `reset-password` answers 204: every session has ended,
+> so the client goes to the login page. Following the link also **verifies the email address** —
+> it was sent there — the same reasoning as accepting an invitation.
+>
+> **Both public email-sending endpoints have a per-address cooldown** (`simplira.auth.email-cooldown`,
+> 60 s): `forgot-password` and `resend-verification` send nothing to an address that was sent a
+> link within it, and answer exactly as they would otherwise. That stops one inbox being flooded;
+> it is not an IP-level rate limit, which is still to add.
 
 ### Email Verification Flow
 
@@ -1008,6 +1028,15 @@ PATCH  /api/v1/users/me/password      🔓 Change password
 POST   /api/v1/users/me/avatar        🔓 Upload avatar
 DELETE /api/v1/users/me/avatar        🔓 Remove avatar
 ```
+
+> - `PATCH /users/me` takes `{ "fullName" }` only. Changing the email would need the new address
+>   verified first, which is its own flow and not built.
+> - `PATCH /users/me/password` takes `{ currentPassword, newPassword }`; a wrong current password
+>   is `INVALID_CURRENT_PASSWORD` (400, not 401 — the session is fine). It **ends every session
+>   and starts a fresh one here**, answering like a login (access token in the body, refresh cookie
+>   set): the refresh cookie is scoped to `/api/v1/auth`, so this request cannot see which session
+>   is the current one to spare it. Other devices are signed out; this one carries on.
+> - Neither is in the audit log: that is workspace history, and a profile belongs to no workspace.
 
 ### Workspace Endpoints
 
@@ -1685,7 +1714,9 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V24__create_email_outbox.sql               -- notification emails, sent by a poller with retries
 ├── V25__create_audit_log.sql                  -- append-only by trigger; jsonb snapshots
 ├── V26__create_email_verification_tokens.sql  -- hashed, single-use, 24 h; resend replaces
-└── V27__create_attachments.sql                -- file_key, not file_url; ATTACHMENT in the audit log
+├── V27__create_attachments.sql                -- file_key, not file_url; ATTACHMENT in the audit log
+├── V28__create_password_reset_tokens.sql      -- hashed, single-use, 1 h
+└── V29__add_refresh_token_revoked_reason.sql  -- only a rotated token triggers theft detection
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -3911,6 +3942,7 @@ e.g. attachments/issue-uuid/abc123_screenshot.png
 > | Purge expired notifications | daily 02:00 | `NotificationService.purgeExpired()` |
 > | Purge expired refresh tokens | daily 02:30 | `AuthService.purgeExpiredRefreshTokens()` |
 > | Purge used or expired verification tokens | daily 02:45 | `EmailVerificationService.purgeSpent()` |
+> | Purge used or expired password reset tokens | daily 02:50 | `PasswordResetService.purgeSpent()` |
 > | Expire outdated invitations | hourly | `InvitationService.expireOutdated()` |
 >
 > **The refresh-token purge deletes every expired token, revoked or not** — the query below keeps
