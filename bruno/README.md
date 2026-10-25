@@ -35,6 +35,7 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Auth 11 | Resend verification | 200 — always, whoever the address belongs to |
 | Auth 12 | Forgot password | 200 — always; the reset email lands in Mailpit |
 | Auth 13 | Reset password | 204 — needs `resetToken`; resets to `userPassword`, ends every session |
+| Auth 14 | Confirm email change | 200 — needs `emailChangeToken`; then set `userEmail` to the new address |
 | Users 1 | Get me | 200 — inherits the collection's bearer auth |
 | Users 2 | Get me - no token | 401 `UNAUTHENTICATED` |
 | Users 3 | Update profile | 200 — the name only |
@@ -42,6 +43,7 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Users 5 | Upload avatar | 200 — `fixtures/sample.png`; captures `avatarUrl` |
 | Users 6 | Get avatar | 302 — no auth, as an `<img>` asks; Location is the signed image link |
 | Users 7 | Remove avatar | 204 — the image is deleted from storage |
+| Users 8 | Request email change | 202 — a link goes to `newEmail`; nothing changes until it is followed |
 | Workspaces 1 | Create workspace | 201 — captures `workspaceId`; slug derived from the name |
 | Workspaces 2 | List my workspaces | 200 — only workspaces you belong to |
 | Workspaces 3 | Get workspace | 200 — a non-member gets 404, not 403 |

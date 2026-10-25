@@ -1,0 +1,34 @@
+meta {
+  name: Confirm email change
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/confirm-email-change
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "token": "{{emailChangeToken}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Needs emailChangeToken from the link Users/Request email change sent. The account's address
+  becomes newEmail, already verified, and the old address gets a "your email was changed" notice
+  in Mailpit.
+
+  Afterwards the account logs in as newEmail: set userEmail to it in the environment (or request
+  a change back) so the rest of the collection keeps working. Existing sessions carry on.
+}

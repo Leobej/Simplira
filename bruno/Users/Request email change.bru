@@ -1,0 +1,35 @@
+meta {
+  name: Request email change
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/users/me/email
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "newEmail": "{{newEmail}}",
+    "currentPassword": "{{userPassword}}"
+  }
+}
+
+assert {
+  res.status: eq 202
+}
+
+docs {
+  202: nothing has changed yet. A confirmation link goes to newEmail - open it in Mailpit
+  (http://localhost:8025) and copy the token at the end into emailChangeToken for
+  Auth/Confirm email change.
+
+  A wrong password is 400 INVALID_CURRENT_PASSWORD, your current address 400 EMAIL_UNCHANGED, an
+  address someone already uses 409 EMAIL_ALREADY_EXISTS.
+}
