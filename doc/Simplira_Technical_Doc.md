@@ -1013,6 +1013,7 @@ POST   /api/v1/auth/forgot-password   🌐 Send reset email
 POST   /api/v1/auth/reset-password    🌐 Reset with token
 POST   /api/v1/auth/verify-email          🌐 Verify email address
 POST   /api/v1/auth/resend-verification   🌐 Resend verification email
+POST   /api/v1/auth/confirm-email-change  🌐 Confirm a new address with the emailed token
 ```
 
 > `refresh` and `logout` are public rather than authenticated. Both are called with an access
@@ -1025,18 +1026,30 @@ POST   /api/v1/auth/resend-verification   🌐 Resend verification email
 GET    /api/v1/users/me               🔓 Get current user profile
 PATCH  /api/v1/users/me               🔓 Update profile
 PATCH  /api/v1/users/me/password      🔓 Change password
+POST   /api/v1/users/me/email         🔓 Ask to change the email address (202)
 POST   /api/v1/users/me/avatar        🔓 Upload avatar
 DELETE /api/v1/users/me/avatar        🔓 Remove avatar
 GET    /api/v1/avatars/{userId}/{id}  🌐 302 to the image (what avatarUrl points at)
 ```
 
-> - `PATCH /users/me` takes `{ "fullName" }` only. Changing the email would need the new address
->   verified first, which is its own flow and not built.
+> - `PATCH /users/me` takes `{ "fullName" }` only; the email has its own two-step flow, below.
 > - `PATCH /users/me/password` takes `{ currentPassword, newPassword }`; a wrong current password
 >   is `INVALID_CURRENT_PASSWORD` (400, not 401 — the session is fine). It **ends every session
 >   and starts a fresh one here**, answering like a login (access token in the body, refresh cookie
 >   set): the refresh cookie is scoped to `/api/v1/auth`, so this request cannot see which session
 >   is the current one to spare it. Other devices are signed out; this one carries on.
+> - **Changing the email address (V30)** takes two proofs, since the address is how someone gets
+>   back into an account. `POST /users/me/email` with `{ newEmail, currentPassword }` checks the
+>   password, that the address is different (`EMAIL_UNCHANGED`, 400) and free
+>   (`EMAIL_ALREADY_EXISTS`, 409 — fine to say to someone signed in who just gave their password),
+>   then emails a link to the **new** address and answers 202: nothing has changed yet. Following
+>   the link, `POST /auth/confirm-email-change` (public — it may be opened on another device),
+>   switches the address, marks it verified (the link proved it) and sends a notice to the **old**
+>   address, so a stolen password cannot quietly move the account somewhere else. The address
+>   is checked again at confirmation, and the unique index has the final word if someone took it
+>   in between. Links last 24 hours, are single use (`INVALID_EMAIL_CHANGE_TOKEN`), a new request
+>   replaces the pending one, and the per-address cooldown applies. Sessions survive the change:
+>   tokens carry the user id, not the address.
 > - Neither is in the audit log: that is workspace history, and a profile belongs to no workspace.
 > - **Avatars** go to the same private bucket as attachments, with the same type rules (PNG,
 >   JPEG, GIF, WebP — never SVG) and a 2 MB cap. Since an `<img>` cannot send a bearer token,
@@ -1745,7 +1758,8 @@ resources/db/migration/   ← APPLIED, in the order the slices were actually bui
 ├── V26__create_email_verification_tokens.sql  -- hashed, single-use, 24 h; resend replaces
 ├── V27__create_attachments.sql                -- file_key, not file_url; ATTACHMENT in the audit log
 ├── V28__create_password_reset_tokens.sql      -- hashed, single-use, 1 h
-└── V29__add_refresh_token_revoked_reason.sql  -- only a rotated token triggers theft detection
+├── V29__add_refresh_token_revoked_reason.sql  -- only a rotated token triggers theft detection
+└── V30__create_email_change_tokens.sql        -- pending address changes; nothing changes until confirmed
 
 STILL TO BUILD — FK order preserved, numbered V5 onward as each one lands.
 Deliberately unnumbered here: Flyway refuses a migration whose version is below one already
@@ -4028,6 +4042,7 @@ e.g. attachments/issue-uuid/abc123_screenshot.png
 > | Purge expired refresh tokens | daily 02:30 | `AuthService.purgeExpiredRefreshTokens()` |
 > | Purge used or expired verification tokens | daily 02:45 | `EmailVerificationService.purgeSpent()` |
 > | Purge used or expired password reset tokens | daily 02:50 | `PasswordResetService.purgeSpent()` |
+> | Purge used or expired email change tokens | daily 02:55 | `EmailChangeService.purgeSpent()` |
 > | Expire outdated invitations | hourly | `InvitationService.expireOutdated()` |
 >
 > **The refresh-token purge deletes every expired token, revoked or not** — the query below keeps
