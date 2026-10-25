@@ -106,8 +106,10 @@ public class DomainServiceConfig {
     }
 
     @Bean
-    public UserProfileService userProfileService(UserRepository userRepository) {
-        return new UserProfileService(userRepository);
+    public UserProfileService userProfileService(UserRepository userRepository,
+                                                 FileStorage fileStorage,
+                                                 ContentTypeDetector contentTypeDetector) {
+        return new UserProfileService(userRepository, fileStorage, contentTypeDetector);
     }
 
     @Bean

@@ -16,7 +16,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -43,6 +48,19 @@ public class UserController {
     public ApiResponse<UserResponse> updateProfile(@Valid @RequestBody UpdateProfileRequest request,
                                                    @CurrentUser User user) {
         return ApiResponse.success(UserResponse.from(userProfileService.rename(user.getId(), request.fullName())));
+    }
+
+    // multipart/form-data with the image in a part named "file"; up to 2 MB, PNG, JPEG, GIF or WebP.
+    @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<UserResponse> uploadAvatar(@RequestParam("file") MultipartFile file,
+                                                  @CurrentUser User user) throws IOException {
+        return ApiResponse.success(UserResponse.from(userProfileService.changeAvatar(user.getId(), file.getBytes())));
+    }
+
+    @DeleteMapping("/me/avatar")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeAvatar(@CurrentUser User user) {
+        userProfileService.removeAvatar(user.getId());
     }
 
     // Every session ends and this one starts again, so the response is a login's: a new access

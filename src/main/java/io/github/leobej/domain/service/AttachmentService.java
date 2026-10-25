@@ -11,14 +11,12 @@ import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.service.ProjectAuthorization.ProjectAccess;
 import io.github.leobej.shared.exception.AttachmentNotFoundException;
 import io.github.leobej.shared.exception.ForbiddenException;
-import io.github.leobej.shared.exception.InvalidAttachmentException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
 import io.github.leobej.shared.exception.ProjectNotFoundException;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 // Image attachments on issues (§4, §25, §27).
@@ -29,10 +27,6 @@ public class AttachmentService {
 
     public static final long MAX_SIZE = 10L * 1024 * 1024;     // §25
     static final Duration URL_LIFETIME = Duration.ofHours(1);  // §27
-
-    // Images a browser renders as images and nothing else. SVG is deliberately missing: it is XML
-    // that can carry script, and opened from a link it runs.
-    private static final Set<String> ALLOWED_TYPES = Set.of("image/png", "image/jpeg", "image/gif", "image/webp");
     private static final int MAX_NAME_LENGTH = 255;
 
     private final AttachmentRepository attachmentRepository;
@@ -64,16 +58,7 @@ public class AttachmentService {
     public AttachmentView upload(UUID issueId, String fileName, byte[] content, UUID actorId) {
         Issue issue = requireVisibleIssue(issueId, actorId);
 
-        if (content == null || content.length == 0) {
-            throw new InvalidAttachmentException("EMPTY_FILE", "The file is empty");
-        }
-        if (content.length > MAX_SIZE) {
-            throw new InvalidAttachmentException("FILE_TOO_LARGE", "Maximum file size is 10 MB");
-        }
-        String mimeType = contentTypeDetector.detect(content);
-        if (!ALLOWED_TYPES.contains(mimeType)) {
-            throw new InvalidAttachmentException("INVALID_FILE_TYPE", "Only PNG, JPEG, GIF and WebP images are allowed");
-        }
+        String mimeType = ImageUploadPolicy.requireImage(content, MAX_SIZE, contentTypeDetector);
 
         Attachment attachment = Attachment.upload(issueId, actorId, displayName(fileName), content.length, mimeType);
         // Bytes first: a row pointing at nothing would show a broken image, while bytes nobody

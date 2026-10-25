@@ -4,18 +4,14 @@ import com.jayway.jsonpath.JsonPath;
 import io.github.leobej.domain.model.workspace.UserWorkspace;
 import io.github.leobej.domain.model.workspace.WorkspaceRole;
 import io.github.leobej.domain.repository.UserWorkspaceRepository;
-import io.github.leobej.support.PostgresTestBase;
+import io.github.leobej.support.S3StorageTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -36,26 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // Against a real S3-compatible server, so the upload, the signed link and the delete are the
 // SDK's actual requests rather than a mock's idea of them.
 @AutoConfigureMockMvc
-class AttachmentFlowTest extends PostgresTestBase {
-
-    // Started once and never stopped, like the Postgres container, for the same reason.
-    static final GenericContainer<?> S3 = new GenericContainer<>("adobe/s3mock:5.2.3")
-            .withExposedPorts(9090)
-            .waitingFor(Wait.forListeningPort());
-
-    static {
-        S3.start();
-    }
-
-    @DynamicPropertySource
-    static void storage(DynamicPropertyRegistry registry) {
-        registry.add("simplira.storage.endpoint", () -> "http://" + S3.getHost() + ":" + S3.getMappedPort(9090));
-        registry.add("simplira.storage.region", () -> "us-east-1");
-        registry.add("simplira.storage.access-key", () -> "test");
-        registry.add("simplira.storage.secret-key", () -> "test");
-        registry.add("simplira.storage.path-style", () -> "true");
-        registry.add("simplira.storage.create-bucket-if-missing", () -> "true");
-    }
+class AttachmentFlowTest extends S3StorageTestBase {
 
     // A real 1x1 PNG.
     private static final byte[] PNG = Base64.getDecoder().decode(

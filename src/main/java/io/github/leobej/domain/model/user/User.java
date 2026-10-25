@@ -50,6 +50,12 @@ public class User {
         touch();
     }
 
+    // null removes it.
+    public void changeAvatar(String newAvatarUrl) {
+        this.avatarUrl = newAvatarUrl;
+        touch();
+    }
+
     public void changeName(String newName) {
         this.fullName = newName;
         this.touch();

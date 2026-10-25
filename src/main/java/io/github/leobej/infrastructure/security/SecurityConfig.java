@@ -50,6 +50,8 @@ public class SecurityConfig {
                         // The WebSocket handshake: a browser cannot attach a bearer token to it, so
                         // the token comes on the STOMP CONNECT frame (StompAuthenticationInterceptor).
                         .requestMatchers(HttpMethod.GET, "/ws").permitAll()
+                        // Avatars: what <img src> loads, which cannot carry a bearer token either.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/avatars/*/*").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions ->
