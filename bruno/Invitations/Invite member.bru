@@ -34,12 +34,8 @@ docs {
   Run Workspaces/Create workspace first - it captures workspaceId. ADMIN only.
 
   The response never contains the token. Only its hash is stored, so the single usable copy is
-  the one that was emailed - and email is currently a stub that writes the link to the
-  application log:
-
-      [stub email] invitation to=... link=http://localhost:5173/invitations/accept?token=XYZ
-
-  Copy that token into the invitationToken environment variable to run Accept invitation.
+  the one that was emailed - open it in Mailpit (http://localhost:8025), and copy the token from
+  the end of its link into the invitationToken environment variable to run Accept invitation.
 
   Inviting the same address twice conflicts with 409 INVITATION_ALREADY_SENT; inviting someone
   who already joined conflicts with 409 ALREADY_A_MEMBER.

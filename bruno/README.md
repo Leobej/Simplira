@@ -6,13 +6,15 @@ environment in the top-right dropdown, or `{{baseUrl}}` will not resolve.
 ## Running the API first
 
 ```
-docker compose -f ../docker/docker-compose.yml up -d postgres s3mock
+docker compose -f ../docker/docker-compose.yml up -d postgres s3mock mailpit
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
 The `dev` profile matters: `application.properties` has no fallback for the JWT secret,
 so without it (or a `JWT_SECRET` environment variable) the app refuses to start. It also points
-attachments at the `s3mock` container, which is why that starts too.
+attachments at the `s3mock` container and email at `mailpit`, which is why those start too.
+Every email the app sends — verification, invitations, resets, notifications — lands in
+Mailpit's inbox at http://localhost:8025.
 
 ## Order
 
@@ -29,9 +31,9 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Auth 7 | Logout | 204 — revokes the session; Refresh afterwards gives 401 |
 | Auth 8 | Register teammate | 201 the first time, 409 after — both pass |
 | Auth 9 | Login teammate | 200 — captures `teammateToken` and `memberUserId` |
-| Auth 10 | Verify email | 200 — needs `verificationToken` pasted from the log; unlocks creating workspaces |
+| Auth 10 | Verify email | 200 — needs `verificationToken` from the email in Mailpit; unlocks creating workspaces |
 | Auth 11 | Resend verification | 200 — always, whoever the address belongs to |
-| Auth 12 | Forgot password | 200 — always; the reset link goes to the log |
+| Auth 12 | Forgot password | 200 — always; the reset email lands in Mailpit |
 | Auth 13 | Reset password | 204 — needs `resetToken`; resets to `userPassword`, ends every session |
 | Users 1 | Get me | 200 — inherits the collection's bearer auth |
 | Users 2 | Get me - no token | 401 `UNAUTHENTICATED` |
@@ -47,9 +49,9 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Workspaces 5 | List members | 200 — grows once invitations are accepted |
 | Workspaces 6 | Search members | 200 — empty under two characters |
 | Workspaces 7 | Delete workspace | 204 — soft delete; frees the slug for reuse |
-| Invitations 1 | Invite member | 201 — captures `invitationId`; token goes to the log, not the response |
+| Invitations 1 | Invite member | 201 — captures `invitationId`; the token is only in the email, in Mailpit |
 | Invitations 2 | List invitations | 200 — never includes the token |
-| Invitations 3 | Accept invitation | 200 — as the teammate; needs `invitationToken` pasted from the log |
+| Invitations 3 | Accept invitation | 200 — as the teammate; needs `invitationToken` from the email in Mailpit |
 | Invitations 4 | Cancel invitation | 204 — the token stops working immediately |
 | Projects 1 | Create project | 201 — captures `projectId`; key derived from the name |
 | Projects 2 | List projects | 200 — filtered by what you can see |
@@ -129,10 +131,11 @@ and `memberUserId`. The few requests that act as the teammate (Invitations 3, No
 say so with their own bearer auth; nothing else changes accounts.
 
 On a fresh database: Register, Login, Register teammate and Login teammate, then Verify email,
-then the rest in order. Two tokens have to be pasted from the application log, because each
-exists only in an email, by design: `verificationToken` (the `[stub email] verify email` line,
-needed before you can create a workspace) and `invitationToken` (for Accept invitation). An
-account created before verification existed has no link yet — run Resend verification first.
+then the rest in order. Two tokens have to be copied out of emails in Mailpit, because each
+exists only in an email, by design: `verificationToken` (from "Confirm your email address",
+needed before you can create a workspace) and `invitationToken` (for Accept invitation). Each
+is the `token=` at the end of the email's link. An account created before verification existed
+has no link yet — run Resend verification first.
 
 Each request carries an `assert` block, so **Run Folder** on `Auth` or the whole collection
 works as a smoke test rather than something you have to eyeball.
@@ -147,7 +150,7 @@ works as a smoke test rather than something you have to eyeball.
 - Nobody is notified about their own actions — that is why Notifications 1 runs as the
   teammate. Assigning `memberUserId` (Assignees 1) works the other way round: log in as the
   teammate to see it arrive.
-- Notification emails are queued and sent by a poller every 10 seconds, so the
-  `[stub email] notification` log line appears shortly after the request, not during it.
+- Notification emails are queued and sent by a poller every 10 seconds, so they reach Mailpit
+  shortly after the request, not during it.
 - Tokens last 15 minutes. When `Get me` starts returning 401, re-run Login (or Refresh).
 - Emails are normalized, so `DEV@SIMPLIRA.COM` and `dev@simplira.com` are the same account.

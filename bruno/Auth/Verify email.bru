@@ -26,11 +26,8 @@ assert {
 }
 
 docs {
-  Register emails a verification link - for now the stub writes it to the application log:
-
-      [stub email] verify email to=john@example.com link=http://localhost:5173/verify-email?token=XYZ
-
-  Paste the token into the verificationToken environment variable. Until this runs, you can log in
+  Register emails a verification link, which lands in Mailpit (http://localhost:8025). The link
+  ends in ?token=XYZ - copy that token into the verificationToken environment variable. Until this runs, you can log in
   but Workspaces/Create workspace answers 403 EMAIL_NOT_VERIFIED.
 
   Single use: a second run is 400 INVALID_VERIFICATION_TOKEN, as is an expired (24 h) or replaced
