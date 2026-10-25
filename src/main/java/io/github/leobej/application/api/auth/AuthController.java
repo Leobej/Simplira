@@ -1,5 +1,6 @@
 package io.github.leobej.application.api.auth;
 
+import io.github.leobej.application.api.auth.request.ConfirmEmailChangeRequest;
 import io.github.leobej.application.api.auth.request.ForgotPasswordRequest;
 import io.github.leobej.application.api.auth.request.LoginRequest;
 import io.github.leobej.application.api.auth.request.RegisterRequest;
@@ -13,6 +14,7 @@ import io.github.leobej.domain.model.token.SessionContext;
 import io.github.leobej.domain.model.user.User;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.AuthService.LoginResult;
+import io.github.leobej.domain.service.EmailChangeService;
 import io.github.leobej.domain.service.EmailVerificationService;
 import io.github.leobej.domain.service.PasswordResetService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,15 +31,18 @@ public class AuthController {
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
     private final PasswordResetService passwordResetService;
+    private final EmailChangeService emailChangeService;
     private final RefreshTokenCookie refreshTokenCookie;
 
     public AuthController(AuthService authService,
                           EmailVerificationService emailVerificationService,
                           PasswordResetService passwordResetService,
+                          EmailChangeService emailChangeService,
                           RefreshTokenCookie refreshTokenCookie) {
         this.authService = authService;
         this.emailVerificationService = emailVerificationService;
         this.passwordResetService = passwordResetService;
+        this.emailChangeService = emailChangeService;
         this.refreshTokenCookie = refreshTokenCookie;
     }
 
@@ -46,6 +51,12 @@ public class AuthController {
     public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         passwordResetService.requestReset(request.email());
         return ApiResponse.success(null);
+    }
+
+    // 🌐 The emailed token is the credential - the link may well be opened on another device.
+    @PostMapping("/confirm-email-change")
+    public ApiResponse<UserResponse> confirmEmailChange(@Valid @RequestBody ConfirmEmailChangeRequest request) {
+        return ApiResponse.success(UserResponse.from(emailChangeService.confirmChange(request.token())));
     }
 
     // 🌐 The emailed token is the credential. Every session ends, so the client goes to the login page.

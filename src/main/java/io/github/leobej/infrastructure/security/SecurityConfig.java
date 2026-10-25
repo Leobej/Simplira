@@ -44,7 +44,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/resend-verification",
                                 // §6: the same reasoning, for the reset link.
                                 "/api/v1/auth/forgot-password",
-                                "/api/v1/auth/reset-password").permitAll()
+                                "/api/v1/auth/reset-password",
+                                // The emailed link again: it may be opened on another device.
+                                "/api/v1/auth/confirm-email-change").permitAll()
                         // The container HEALTHCHECK curls this with no credentials.
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         // The WebSocket handshake: a browser cannot attach a bearer token to it, so

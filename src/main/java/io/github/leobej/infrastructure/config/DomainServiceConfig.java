@@ -13,6 +13,7 @@ import io.github.leobej.domain.port.NotificationPublisher;
 import io.github.leobej.domain.repository.CommentRepository;
 import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
 import io.github.leobej.domain.repository.DefaultIssueTypeRepository;
+import io.github.leobej.domain.repository.EmailChangeTokenRepository;
 import io.github.leobej.domain.repository.EmailOutboxRepository;
 import io.github.leobej.domain.repository.EmailVerificationTokenRepository;
 import io.github.leobej.domain.repository.InvitationRepository;
@@ -39,6 +40,7 @@ import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.BlockedFlagSync;
 import io.github.leobej.domain.service.ChartService;
 import io.github.leobej.domain.service.CommentService;
+import io.github.leobej.domain.service.EmailChangeService;
 import io.github.leobej.domain.service.EmailOutboxDispatcher;
 import io.github.leobej.domain.service.EmailVerificationService;
 import io.github.leobej.domain.service.InvitationService;
@@ -105,6 +107,18 @@ public class DomainServiceConfig {
         return new PasswordResetService(passwordResetTokenRepository, userRepository, refreshTokenRepository,
                 passwordHasher, emailService, Duration.ofSeconds(resetExpirySeconds),
                 Duration.ofSeconds(cooldownSeconds));
+    }
+
+    @Bean
+    public EmailChangeService emailChangeService(
+            EmailChangeTokenRepository emailChangeTokenRepository,
+            UserRepository userRepository,
+            PasswordHasher passwordHasher,
+            EmailService emailService,
+            @Value("${simplira.auth.email-change.expiry}") long changeExpirySeconds,
+            @Value("${simplira.auth.email-cooldown}") long cooldownSeconds) {
+        return new EmailChangeService(emailChangeTokenRepository, userRepository, passwordHasher, emailService,
+                Duration.ofSeconds(changeExpirySeconds), Duration.ofSeconds(cooldownSeconds));
     }
 
     @Bean

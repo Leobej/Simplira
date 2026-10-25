@@ -6,5 +6,7 @@ public interface EmailService {
     void sendInvitation(String to, String workspaceName, String invitationToken);
     void sendPasswordReset(String to, String resetToken);
     void sendEmailVerification(String to, String verificationToken);
+    void sendEmailChange(String to, String changeToken);
+    void sendEmailChangedNotice(String to, String newAddress);
     void sendNotification(String to, String subject, String body);
 }

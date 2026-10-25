@@ -12,9 +12,11 @@ import io.github.leobej.shared.exception.IssueStatusNotFoundException;
 import io.github.leobej.shared.exception.IssueLinkNotFoundException;
 import io.github.leobej.shared.exception.AttachmentNotFoundException;
 import io.github.leobej.shared.exception.EmailNotVerifiedException;
+import io.github.leobej.shared.exception.EmailUnchangedException;
 import io.github.leobej.shared.exception.InvalidAttachmentException;
 import io.github.leobej.shared.exception.InvalidCurrentPasswordException;
 import io.github.leobej.shared.exception.InvalidDateRangeException;
+import io.github.leobej.shared.exception.InvalidEmailChangeTokenException;
 import io.github.leobej.shared.exception.InvalidResetTokenException;
 import io.github.leobej.shared.exception.InvalidVerificationTokenException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
@@ -269,6 +271,18 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleInvalidDateRange(InvalidDateRangeException ex) {
         return ApiResponse.failure(ErrorResponse.of("INVALID_DATE_RANGE", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidEmailChangeTokenException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidEmailChangeToken(InvalidEmailChangeTokenException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_EMAIL_CHANGE_TOKEN", ex.getMessage()));
+    }
+
+    @ExceptionHandler(EmailUnchangedException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleEmailUnchanged(EmailUnchangedException ex) {
+        return ApiResponse.failure(ErrorResponse.of("EMAIL_UNCHANGED", ex.getMessage()));
     }
 
     @ExceptionHandler(InvalidResetTokenException.class)

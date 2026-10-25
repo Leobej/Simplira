@@ -50,6 +50,13 @@ public class User {
         touch();
     }
 
+    // Only ever with an address proved by following a link sent to it, so it arrives verified.
+    public void changeEmail(String newEmail) {
+        this.email = normalizeEmail(newEmail);
+        this.emailVerified = true;
+        touch();
+    }
+
     // null removes it.
     public void changeAvatar(String newAvatarUrl) {
         this.avatarUrl = newAvatarUrl;

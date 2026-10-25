@@ -33,6 +33,22 @@ final class EmailTemplates {
                 "If you did not ask for this, ignore it: your password stays as it is.");
     }
 
+    static Email emailChange(String link) {
+        return withButton("Confirm your new email address for Simplira",
+                "Confirm that this is the address you want to use for your Simplira account.",
+                "Confirm the new address", link,
+                "If you did not ask for this, ignore it: nothing changes until the link is followed.");
+    }
+
+    static Email emailChanged(String newAddress) {
+        String text = "The email address on your Simplira account was changed to " + newAddress + ".\n\n"
+                + "If this was not you, reset your password straight away and contact your workspace admin.";
+        String html = "<p>The email address on your Simplira account was changed to <strong>"
+                + HtmlUtils.htmlEscape(newAddress) + "</strong>.</p>"
+                + "<p>If this was not you, reset your password straight away and contact your workspace admin.</p>";
+        return new Email("Your Simplira email address was changed", text, wrap(html));
+    }
+
     static Email notification(String title, String body, String appBaseUrl) {
         String text = title + (body.isBlank() ? "" : "\n\n" + body)
                 + "\n\nOpen Simplira: " + appBaseUrl

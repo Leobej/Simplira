@@ -50,7 +50,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             AUTH + "forgot-password", new Rule("forgot-password", 5, Duration.ofMinutes(15)),
             AUTH + "resend-verification", new Rule("resend-verification", 5, Duration.ofMinutes(15)),
             AUTH + "reset-password", new Rule("reset-password", 10, Duration.ofMinutes(15)),
-            AUTH + "verify-email", new Rule("verify-email", 20, Duration.ofMinutes(15)));
+            AUTH + "verify-email", new Rule("verify-email", 20, Duration.ofMinutes(15)),
+            AUTH + "confirm-email-change", new Rule("confirm-email-change", 20, Duration.ofMinutes(15)));
 
     private static final Duration LONGEST_WINDOW = Duration.ofHours(1);
 

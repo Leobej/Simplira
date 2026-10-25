@@ -57,6 +57,21 @@ public class SmtpEmailService implements EmailService {
     }
 
     @Override
+    public void sendEmailChange(String to, String changeToken) {
+        sendWithToken("email change", to, EmailTemplates.emailChange(link("/confirm-email-change", changeToken)));
+    }
+
+    // No token, but the same policy: the change has already happened, so a failed notice is logged.
+    @Override
+    public void sendEmailChangedNotice(String to, String newAddress) {
+        try {
+            send(to, EmailTemplates.emailChanged(newAddress));
+        } catch (MailException | MessagingException ex) {
+            log.error("Email delivery failed: type=email changed notice, to={}", to, ex);
+        }
+    }
+
+    @Override
     public void sendNotification(String to, String subject, String body) {
         try {
             send(to, EmailTemplates.notification(subject, body, appBaseUrl));

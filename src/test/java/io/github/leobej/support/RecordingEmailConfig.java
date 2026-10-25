@@ -28,6 +28,8 @@ public class RecordingEmailConfig {
         private final Map<String, String> invitationTokens = new ConcurrentHashMap<>();
         private final Map<String, String> verificationTokens = new ConcurrentHashMap<>();
         private final Map<String, String> resetTokens = new ConcurrentHashMap<>();
+        private final Map<String, String> changeTokens = new ConcurrentHashMap<>();
+        private final Map<String, String> changedNotices = new ConcurrentHashMap<>();
         private final Map<String, List<String>> notificationSubjects = new ConcurrentHashMap<>();
 
         public String invitationTokenFor(String email) {
@@ -50,6 +52,24 @@ public class RecordingEmailConfig {
 
         public String resetTokenFor(String email) {
             return resetTokens.get(email.toLowerCase(Locale.ROOT));
+        }
+
+        @Override
+        public void sendEmailChange(String to, String changeToken) {
+            changeTokens.put(to.toLowerCase(Locale.ROOT), changeToken);
+        }
+
+        public String changeTokenFor(String email) {
+            return changeTokens.get(email.toLowerCase(Locale.ROOT));
+        }
+
+        @Override
+        public void sendEmailChangedNotice(String to, String newAddress) {
+            changedNotices.put(to.toLowerCase(Locale.ROOT), newAddress);
+        }
+
+        public String changedNoticeFor(String email) {
+            return changedNotices.get(email.toLowerCase(Locale.ROOT));
         }
 
         // The latest link sent to an address, the way someone would click the newest email.

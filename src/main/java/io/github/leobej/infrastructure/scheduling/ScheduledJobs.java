@@ -1,6 +1,7 @@
 package io.github.leobej.infrastructure.scheduling;
 
 import io.github.leobej.domain.service.AuthService;
+import io.github.leobej.domain.service.EmailChangeService;
 import io.github.leobej.domain.service.EmailVerificationService;
 import io.github.leobej.domain.service.InvitationService;
 import io.github.leobej.domain.service.NotificationService;
@@ -22,17 +23,20 @@ public class ScheduledJobs {
     private final InvitationService invitationService;
     private final EmailVerificationService emailVerificationService;
     private final PasswordResetService passwordResetService;
+    private final EmailChangeService emailChangeService;
 
     public ScheduledJobs(NotificationService notificationService,
                          AuthService authService,
                          InvitationService invitationService,
                          EmailVerificationService emailVerificationService,
-                         PasswordResetService passwordResetService) {
+                         PasswordResetService passwordResetService,
+                         EmailChangeService emailChangeService) {
         this.notificationService = notificationService;
         this.authService = authService;
         this.invitationService = invitationService;
         this.emailVerificationService = emailVerificationService;
         this.passwordResetService = passwordResetService;
+        this.emailChangeService = emailChangeService;
     }
 
     // Daily at 02:00.
@@ -61,6 +65,13 @@ public class ScheduledJobs {
     public void purgeSpentResetTokens() {
         int deleted = passwordResetService.purgeSpent();
         log.info("Purged used or expired password reset tokens: count={}", deleted);
+    }
+
+    // Daily at 02:55.
+    @Scheduled(cron = "0 55 2 * * *")
+    public void purgeSpentEmailChangeTokens() {
+        int deleted = emailChangeService.purgeSpent();
+        log.info("Purged used or expired email change tokens: count={}", deleted);
     }
 
     // Hourly, on the hour.
