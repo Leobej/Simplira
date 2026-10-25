@@ -13,7 +13,6 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 
 import java.security.Principal;
-import java.util.Set;
 import java.util.UUID;
 
 // The WebSocket handshake is public - a browser cannot put a bearer token on it - so the access
@@ -25,17 +24,16 @@ import java.util.UUID;
 @Component
 public class StompAuthenticationInterceptor implements ChannelInterceptor {
 
-    // Everything a client may subscribe to. Anything else is refused, the way a new REST endpoint
-    // is private until someone opts it in - and a raw /queue/... name could otherwise be used to
-    // listen in on another session's user queue.
-    private static final Set<String> SUBSCRIBABLE = Set.of("/user/queue/notifications");
-
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final SubscriptionAuthorizer subscriptionAuthorizer;
 
-    public StompAuthenticationInterceptor(JwtService jwtService, UserRepository userRepository) {
+    public StompAuthenticationInterceptor(JwtService jwtService,
+                                          UserRepository userRepository,
+                                          SubscriptionAuthorizer subscriptionAuthorizer) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+        this.subscriptionAuthorizer = subscriptionAuthorizer;
     }
 
     @Override
@@ -46,9 +44,11 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
         }
         if (accessor.getCommand() == StompCommand.CONNECT) {
             accessor.setUser(authenticate(accessor.getFirstNativeHeader("Authorization")));
-        } else if (accessor.getCommand() == StompCommand.SUBSCRIBE
-                && !SUBSCRIBABLE.contains(accessor.getDestination())) {
-            throw new MessageDeliveryException("Cannot subscribe to " + accessor.getDestination());
+        } else if (accessor.getCommand() == StompCommand.SUBSCRIBE) {
+            UUID userId = UUID.fromString(accessor.getUser().getName());
+            if (!subscriptionAuthorizer.maySubscribe(userId, accessor.getDestination())) {
+                throw new MessageDeliveryException("Cannot subscribe to " + accessor.getDestination());
+            }
         } else if (accessor.getCommand() == StompCommand.SEND) {
             // Nothing is handled client-to-server yet; everything goes through REST.
             throw new MessageDeliveryException("Sending over the WebSocket is not supported");

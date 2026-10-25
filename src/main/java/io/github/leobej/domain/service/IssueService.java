@@ -2,6 +2,7 @@ package io.github.leobej.domain.service;
 
 import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.issue.Issue;
+import io.github.leobej.domain.model.live.LiveUpdate;
 import io.github.leobej.domain.model.issue.IssueFilter;
 import io.github.leobej.domain.model.issue.IssuePage;
 import io.github.leobej.domain.model.issue.IssuePriority;
@@ -10,6 +11,7 @@ import io.github.leobej.domain.model.issue.IssueStatusCategory;
 import io.github.leobej.domain.model.issue.IssueType;
 import io.github.leobej.domain.model.project.Project;
 import io.github.leobej.domain.model.sprint.Sprint;
+import io.github.leobej.domain.port.LiveUpdatePublisher;
 import io.github.leobej.domain.repository.IssueRepository;
 import io.github.leobej.domain.repository.IssueStatusRepository;
 import io.github.leobej.domain.repository.IssueTypeRepository;
@@ -47,6 +49,7 @@ public class IssueService {
     private final BlockedFlagSync blockedFlagSync;
     private final Notifier notifier;
     private final AuditTrail auditTrail;
+    private final LiveUpdatePublisher liveUpdatePublisher;
 
     public IssueService(IssueRepository issueRepository,
                         IssueTypeRepository issueTypeRepository,
@@ -56,7 +59,8 @@ public class IssueService {
                         ProjectAuthorization projectAuthorization,
                         BlockedFlagSync blockedFlagSync,
                         Notifier notifier,
-                        AuditTrail auditTrail) {
+                        AuditTrail auditTrail,
+                        LiveUpdatePublisher liveUpdatePublisher) {
         this.issueRepository = issueRepository;
         this.issueTypeRepository = issueTypeRepository;
         this.issueStatusRepository = issueStatusRepository;
@@ -66,6 +70,7 @@ public class IssueService {
         this.blockedFlagSync = blockedFlagSync;
         this.notifier = notifier;
         this.auditTrail = auditTrail;
+        this.liveUpdatePublisher = liveUpdatePublisher;
     }
 
     public Issue create(UUID projectId,
@@ -307,7 +312,10 @@ public class IssueService {
                     : issueRepository.maxSprintPosition(issue.getSprintId()) + POSITION_GAP;
         }
         issue.reposition(position);
-        return issueRepository.save(issue);
+        Issue saved = issueRepository.save(issue);
+        // Not audited - reordering is not history - but everyone looking at the board needs it.
+        liveUpdatePublisher.publish(LiveUpdate.issueRepositioned(saved, actorId));
+        return saved;
     }
 
     public Issue moveToSprint(UUID issueId, UUID sprintId, UUID actorId) {

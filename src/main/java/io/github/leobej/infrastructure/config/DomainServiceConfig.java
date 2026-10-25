@@ -5,6 +5,7 @@ import io.github.leobej.domain.port.PasswordHasher;
 import io.github.leobej.domain.repository.AuditLogRepository;
 import io.github.leobej.domain.repository.RefreshTokenRepository;
 import io.github.leobej.domain.port.EmailService;
+import io.github.leobej.domain.port.LiveUpdatePublisher;
 import io.github.leobej.domain.port.NotificationPublisher;
 import io.github.leobej.domain.repository.CommentRepository;
 import io.github.leobej.domain.repository.DefaultIssueStatusRepository;
@@ -94,10 +95,13 @@ public class DomainServiceConfig {
         return new WorkspaceAuthorization(workspaceRepository, userWorkspaceRepository);
     }
 
-    // Every service that changes something worth remembering records it through this.
+    // Every service that changes something worth remembering records it through this - and every
+    // record is also announced to open boards.
     @Bean
-    public AuditTrail auditTrail(AuditLogRepository auditLogRepository, ProjectRepository projectRepository) {
-        return new AuditTrail(auditLogRepository, projectRepository);
+    public AuditTrail auditTrail(AuditLogRepository auditLogRepository,
+                                 ProjectRepository projectRepository,
+                                 LiveUpdatePublisher liveUpdatePublisher) {
+        return new AuditTrail(auditLogRepository, projectRepository, liveUpdatePublisher);
     }
 
     @Bean
@@ -238,9 +242,11 @@ public class DomainServiceConfig {
                                      ProjectAuthorization projectAuthorization,
                                      BlockedFlagSync blockedFlagSync,
                                      Notifier notifier,
-                                     AuditTrail auditTrail) {
+                                     AuditTrail auditTrail,
+                                     LiveUpdatePublisher liveUpdatePublisher) {
         return new IssueService(issueRepository, issueTypeRepository, issueStatusRepository,
-                projectRepository, sprintRepository, projectAuthorization, blockedFlagSync, notifier, auditTrail);
+                projectRepository, sprintRepository, projectAuthorization, blockedFlagSync, notifier, auditTrail,
+                liveUpdatePublisher);
     }
 
     @Bean

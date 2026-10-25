@@ -4,8 +4,10 @@ import io.github.leobej.domain.model.audit.AuditAction;
 import io.github.leobej.domain.model.audit.AuditEntityType;
 import io.github.leobej.domain.model.audit.AuditEntry;
 import io.github.leobej.domain.model.issue.Issue;
+import io.github.leobej.domain.model.live.LiveUpdate;
 import io.github.leobej.domain.model.project.Project;
 import io.github.leobej.domain.model.sprint.Sprint;
+import io.github.leobej.domain.port.LiveUpdatePublisher;
 import io.github.leobej.domain.repository.AuditLogRepository;
 import io.github.leobej.domain.repository.ProjectRepository;
 import io.github.leobej.shared.exception.ProjectNotFoundException;
@@ -22,16 +24,23 @@ import java.util.UUID;
 // Written synchronously - one INSERT - rather than through a queue: history that can lag behind
 // what it describes, or be lost with a broker, is weaker for no real saving.
 //
+// Every entry is also announced as a LiveUpdate (§8). This is already the one place that sees
+// every meaningful change, so live boards ride on it instead of a second call in every service.
+//
 // Pure domain: no Spring annotations, no infrastructure imports.
 // Wired as a bean by infrastructure.config.DomainServiceConfig.
 public class AuditTrail {
 
     private final AuditLogRepository auditLogRepository;
     private final ProjectRepository projectRepository;
+    private final LiveUpdatePublisher liveUpdatePublisher;
 
-    public AuditTrail(AuditLogRepository auditLogRepository, ProjectRepository projectRepository) {
+    public AuditTrail(AuditLogRepository auditLogRepository,
+                      ProjectRepository projectRepository,
+                      LiveUpdatePublisher liveUpdatePublisher) {
         this.auditLogRepository = auditLogRepository;
         this.projectRepository = projectRepository;
+        this.liveUpdatePublisher = liveUpdatePublisher;
     }
 
     public void onIssue(Issue issue, AuditAction action, Map<String, Object> oldValue,
@@ -106,13 +115,20 @@ public class AuditTrail {
                 }
             });
             if (!after.isEmpty()) {
-                auditLogRepository.append(AuditEntry.of(workspaceId, projectId, issueId, actorId, entityType,
-                        entityId, action, before, after));
+                append(AuditEntry.of(workspaceId, projectId, issueId, actorId, entityType, entityId, action,
+                        before, after));
             }
             return;
         }
-        auditLogRepository.append(AuditEntry.of(workspaceId, projectId, issueId, actorId, entityType, entityId,
-                action, oldValue, newValue));
+        append(AuditEntry.of(workspaceId, projectId, issueId, actorId, entityType, entityId, action,
+                oldValue, newValue));
+    }
+
+    // Recorded, then announced: anything worth keeping is worth showing to whoever has the board
+    // open, and an update that recorded nothing announces nothing either.
+    private void append(AuditEntry entry) {
+        auditLogRepository.append(entry);
+        liveUpdatePublisher.publish(LiveUpdate.of(entry));
     }
 
     // Live projects only, which is enough: nothing in a deleted project can be changed any more,
