@@ -1333,8 +1333,8 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 > - **Authentication.** The handshake is public (a browser cannot put a bearer token on it). The
 >   access token goes on the STOMP CONNECT frame as `Authorization: Bearer …` and is checked by
 >   `StompAuthenticationInterceptor` the way the REST filter checks it; a bad or missing one gets
->   an ERROR frame. It is checked once: a connection outlives the 15-minute token, and logout does
->   not close it.
+>   an ERROR frame. The token's expiry is kept per session, because a connection outlives it — see
+>   "Re-checking open connections" below.
 > - **What a client can do.** SUBSCRIBE, by `SubscriptionAuthorizer`, to exactly these — anything
 >   else is refused, the way a new REST endpoint starts private; SEND is refused:
 >
@@ -1346,9 +1346,25 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 >   | `/topic/workspace/{workspaceId}` | workspace member | workspace renames and member changes |
 >
 >   A raw `/queue/...` name is refused because it could be used to listen to another session's
->   user queue. Access is checked at SUBSCRIBE only: someone who loses it keeps an open
->   subscription until they reconnect — which is why board events carry ids and a type, never
->   content.
+>   user queue.
+> - **Re-checking open connections.** CONNECT and SUBSCRIBE are checked once, but a connection
+>   stays open for hours, so `ConnectionSweeper` walks the open sessions every
+>   `simplira.websocket.access-check-interval` (30 s) and ends any that would not be let in again:
+>
+>   | When | ERROR frame `message` |
+>   |---|---|
+>   | the access token it connected with has expired | `Access token expired` |
+>   | a subscription would now be refused (removed from the workspace or project, project made private, issue deleted) | `No longer allowed to subscribe to {destination}` |
+>
+>   The whole session ends, not the one subscription: the simple broker cannot drop a
+>   subscription from the server without the client knowing, and a board that silently stops
+>   updating is worse than one told to reconnect. Spring closes the socket after the ERROR frame,
+>   the same as a refused CONNECT or SUBSCRIBE. The client refreshes its token if it needs to,
+>   reconnects and resubscribes, and every check runs again — a destination still refused comes
+>   back as `Cannot subscribe to …`, which the client should stop asking for. Access can outlast
+>   its withdrawal by up to one interval, which is also why board events carry ids and a type,
+>   never content. Logging out ends nothing by itself, the same as REST: the access token stays
+>   good until it expires.
 > - **Board events ride on the audit log.** Every `AuditTrail` entry is also published as a
 >   `LiveUpdate`, since that is already the one place that sees every meaningful change — no
 >   second hook in every service. The one addition is `ISSUE_REPOSITIONED`: reordering is not
@@ -4051,7 +4067,8 @@ e.g. attachments/issue-uuid/abc123_screenshot.png
 > `LocalDateTime`, like every other column (§4's timezone convention).
 >
 > The email outbox poller (§8) is a separate `EmailOutboxPoller`, so tests can switch it off
-> with `simplira.email.outbox.polling=false` and send queued email themselves.
+> with `simplira.email.outbox.polling=false` and send queued email themselves. §8's
+> `ConnectionSweeper` is scheduled too, every 30 s, but lives with the WebSocket code it checks.
 
 ### Setup
 

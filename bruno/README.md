@@ -148,7 +148,8 @@ works as a smoke test rather than something you have to eyeball.
   Any STOMP client works: send `Authorization: Bearer <accessToken>` on CONNECT, then SUBSCRIBE to
   `/topic/project/{projectId}` and run requests here to watch events arrive (`ISSUE_CREATED`,
   `ISSUE_REPOSITIONED`, `COMMENT_CREATED`...). `/user/queue/notifications` carries your own
-  notifications.
+  notifications. The server ends the connection with an ERROR frame (`Access token expired`)
+  within 30 seconds of the token running out, so reconnect with a fresh one after Refresh.
 - Nobody is notified about their own actions — that is why Notifications 1 runs as the
   teammate. Assigning `memberUserId` (Assignees 1) works the other way round: log in as the
   teammate to see it arrive.
