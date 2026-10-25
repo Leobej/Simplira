@@ -2742,6 +2742,19 @@ class IntegrationTest {
 
 ### CI Pipeline — GitHub Actions
 
+> **As built:** `.github/workflows/ci.yml` runs `./mvnw -B verify` on every push to `master` and
+> every pull request, with Java 25. It differs from the sketch below in three ways:
+> - **No `services: postgres`.** The suites start their own containers through Testcontainers
+>   (Postgres 18, S3Mock), as they do locally; GitHub's Ubuntu runners have Docker. One setup,
+>   not two that can drift.
+> - **The branch is `master`**, and there is no frontend job yet — there is no frontend.
+> - **`mvnw` was committed without its executable bit**, which a Linux runner refuses; it now has
+>   it, and `.gitattributes` keeps the script's line endings LF.
+>
+> Test reports are kept as an artifact when a run fails, and a newer push cancels an older run on
+> the same branch. Dependabot (`.github/dependabot.yml`) opens weekly pull requests for Maven and
+> Actions updates, with Spring Boot's grouped into one; CI runs on each.
+
 ```yaml
 # .github/workflows/ci.yml
 name: CI
