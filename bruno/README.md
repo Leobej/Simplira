@@ -6,12 +6,13 @@ environment in the top-right dropdown, or `{{baseUrl}}` will not resolve.
 ## Running the API first
 
 ```
-docker compose -f ../docker/docker-compose.yml up -d postgres
+docker compose -f ../docker/docker-compose.yml up -d postgres s3mock
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
 The `dev` profile matters: `application.properties` has no fallback for the JWT secret,
-so without it (or a `JWT_SECRET` environment variable) the app refuses to start.
+so without it (or a `JWT_SECRET` environment variable) the app refuses to start. It also points
+attachments at the `s3mock` container, which is why that starts too.
 
 ## Order
 
@@ -103,6 +104,9 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Audit Log 1 | Issue history | 200 — newest first; only the fields that changed |
 | Audit Log 2 | Project audit log | 200 — TEAM_LEADER or ADMIN |
 | Audit Log 3 | Workspace audit log | 200 — ADMIN only; `actorId` narrows to one person |
+| Attachments 1 | Upload attachment | 201 — `fixtures/sample.png`; type read from the bytes; captures `attachmentId` |
+| Attachments 2 | List attachments | 200 — each with a signed link valid for an hour |
+| Attachments 3 | Delete attachment | 204 — uploader or ADMIN; the bytes go too |
 
 You are `userEmail` / `userPassword` from the **Local** environment (`john@example.com` /
 `supersecret`), and every request runs as you unless it says otherwise. Change it there and the

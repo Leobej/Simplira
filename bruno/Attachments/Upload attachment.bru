@@ -1,0 +1,36 @@
+meta {
+  name: Upload attachment
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/attachments
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  file: @file(fixtures/sample.png)
+}
+
+vars:post-response {
+  attachmentId: res.body.data.id
+  attachmentUrl: res.body.data.url
+}
+
+assert {
+  res.status: eq 201
+  res.body.data.mimeType: eq image/png
+}
+
+docs {
+  Needs the S3Mock from docker-compose running (see the README). Uploads fixtures/sample.png, a
+  1x1 PNG; pick any image of your own in the Body tab.
+
+  The type is read from the bytes: a renamed HTML file is 415 INVALID_FILE_TYPE whatever its name
+  says, and so is an SVG. Over 10 MB is 413 FILE_TOO_LARGE.
+
+  data.url is a signed link valid for an hour - open it in a browser to see the image. It is
+  captured as attachmentUrl.
+}

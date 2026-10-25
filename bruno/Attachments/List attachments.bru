@@ -1,0 +1,20 @@
+meta {
+  name: List attachments
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/issues/{{issueId}}/attachments
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Oldest first. Every response signs fresh links, so a client should refetch rather than keep a URL
+  past its urlExpiresAt.
+}

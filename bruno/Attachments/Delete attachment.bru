@@ -1,0 +1,20 @@
+meta {
+  name: Delete attachment
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/attachments/{{attachmentId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  The uploader or a workspace ADMIN. The bytes are deleted from storage straight away, so
+  attachmentUrl stops working too; the record stays in the issue's audit log.
+}
