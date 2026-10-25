@@ -1,0 +1,20 @@
+version: 2
+
+# Weekly pull requests for outdated dependencies; CI runs the suite on each one before anyone
+# merges it.
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Boot moves its managed dependencies together; one PR rather than one per artifact.
+      spring-boot:
+        patterns:
+          - "org.springframework.boot*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
