@@ -2,19 +2,31 @@ version: 2
 
 # Weekly pull requests for outdated dependencies; CI runs the suite on each one before anyone
 # merges it.
+#
+# The cooldown holds a release back until it is 14 days old, so a broken or compromised version
+# has time to be noticed and pulled first. It covers version updates only: security updates still
+# arrive the day they are published.
 updates:
   - package-ecosystem: maven
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
     groups:
       # Boot moves its managed dependencies together; one PR rather than one per artifact.
       spring-boot:
         patterns:
           - "org.springframework.boot*"
+      # jjwt-api, jjwt-impl and jjwt-jackson only work at the same version.
+      jjwt:
+        patterns:
+          - "io.jsonwebtoken:*"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
