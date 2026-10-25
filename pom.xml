@@ -29,7 +29,7 @@
 	<properties>
 		<java.version>25</java.version>
 		<aws-sdk.version>2.55.14</aws-sdk.version>
-		<tika.version>3.3.3</tika.version>
+		<tika.version>4.1.0</tika.version>
 	</properties>
 	<dependencies>
 		<dependency>
