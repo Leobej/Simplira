@@ -1027,6 +1027,7 @@ PATCH  /api/v1/users/me               🔓 Update profile
 PATCH  /api/v1/users/me/password      🔓 Change password
 POST   /api/v1/users/me/avatar        🔓 Upload avatar
 DELETE /api/v1/users/me/avatar        🔓 Remove avatar
+GET    /api/v1/avatars/{userId}/{id}  🌐 302 to the image (what avatarUrl points at)
 ```
 
 > - `PATCH /users/me` takes `{ "fullName" }` only. Changing the email would need the new address
@@ -1037,6 +1038,14 @@ DELETE /api/v1/users/me/avatar        🔓 Remove avatar
 >   set): the refresh cookie is scoped to `/api/v1/auth`, so this request cannot see which session
 >   is the current one to spare it. Other devices are signed out; this one carries on.
 > - Neither is in the audit log: that is workspace history, and a profile belongs to no workspace.
+> - **Avatars** go to the same private bucket as attachments, with the same type rules (PNG,
+>   JPEG, GIF, WebP — never SVG) and a 2 MB cap. Since an `<img>` cannot send a bearer token,
+>   `avatarUrl` is not a storage link but a path on this API, `/api/v1/avatars/{userId}/{avatarId}`:
+>   public, it answers `302` to a freshly signed link (cached privately for 10 minutes, well inside
+>   the link's hour). Every response that already carried `avatarUrl` works unchanged; a client
+>   prefixes the API's base URL. Only the user's *current* avatar resolves — an old or made-up id
+>   is 404 — and each upload gets a new id, so a browser never shows the old image in place of the
+>   new one. Replacing or removing an avatar deletes the previous object. Avatars are not resized.
 
 ### Workspace Endpoints
 
