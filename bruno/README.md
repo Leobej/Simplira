@@ -114,6 +114,9 @@ Requests are numbered, and the sequence is meant to be run top to bottom:
 | Attachments 1 | Upload attachment | 201 — `fixtures/sample.png`; type read from the bytes; captures `attachmentId` |
 | Attachments 2 | List attachments | 200 — each with a signed link valid for an hour |
 | Attachments 3 | Delete attachment | 204 — uploader or ADMIN; the bytes go too |
+| Charts 1 | Burndown | 200 — per day of the sprint; needs `sprintId` |
+| Charts 2 | Velocity | 200 — completed sprints, committed against completed |
+| Charts 3 | Cumulative flow | 200 — last 30 days by status category |
 
 You are `userEmail` / `userPassword` from the **Local** environment (`john@example.com` /
 `supersecret`), and every request runs as you unless it says otherwise. Change it there and the

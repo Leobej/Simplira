@@ -1,0 +1,22 @@
+meta {
+  name: Cumulative flow
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/charts/cumulative-flow
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.days.length: eq 30
+}
+
+docs {
+  The last 30 days by default; add ?from=2026-10-01&to=2026-10-25 (inclusive, at most 180 days).
+  Each day counts the project's issues by the status category they were in at its end -
+  categories, never status names, so adding or renaming a column does not break the bands.
+}

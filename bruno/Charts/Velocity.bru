@@ -1,0 +1,24 @@
+meta {
+  name: Velocity
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/charts/velocity?sprints=10
+  body: none
+  auth: inherit
+}
+
+params:query {
+  sprints: 10
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Completed sprints only, oldest first. committed = finished + carried over at close; the gap
+  between committed and completed is how much each sprint overcommitted.
+}

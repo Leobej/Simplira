@@ -1,0 +1,23 @@
+meta {
+  name: Burndown
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/sprints/{{sprintId}}/charts/burndown
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  One row per day of the sprint (UTC). total is the scope in issues - including any the sprint's
+  close carried out to the backlog. remaining is null for days still to come; ideal runs from
+  total to 0 across the whole sprint.
+
+  Move some issues into the sprint (Issues/Move to sprint) and to a DONE status to see it move.
+}
