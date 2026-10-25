@@ -125,6 +125,14 @@ Permission resolution logic:
 | DB Admin UI | pgAdmin 4 (browser-based, http://localhost:5050) |
 | Authentication | JWT (Access + Refresh token strategy) |
 
+> **As built: no RabbitMQ.** One instance runs today, so WebSocket uses Spring's in-memory simple
+> broker (§8) and notification email goes through the `email_outbox` table (§8, V24) — neither
+> needs a broker. `spring-boot-starter-amqp`, its `spring.rabbitmq.*` settings and the compose
+> service were removed once nothing used them. Going multi-instance brings RabbitMQ back as the
+> STOMP relay, which speaks STOMP to its `rabbitmq_stomp` plugin and needs reactor-netty, not the
+> AMQP starter. The real `docker/docker-compose.yml` runs Postgres, pgAdmin, S3Mock (§27) and
+> Mailpit (§25).
+
 ### Docker Compose (Local Development)
 
 > **Note:** PostgreSQL 18+ changed the data directory structure. The volume must be mounted at
@@ -1379,7 +1387,8 @@ GET    /api/v1/projects/{projectId}/charts/cumulative-flow          👤 Cumulat
 > - **Broker.** Spring's in-memory simple broker, not the RabbitMQ relay: one instance runs today.
 >   Going multi-instance is a change to `WebSocketConfig` alone — `enableStompBrokerRelay`,
 >   reactor-netty on the classpath, and `setUserDestinationBroadcast` /
->   `setUserRegistryBroadcast` so a user destination reaches sessions on another instance.
+>   `setUserRegistryBroadcast` so a user destination reaches sessions on another instance —
+>   plus a RabbitMQ with the STOMP plugin to relay to, which local compose no longer runs (§2).
 >
 > **Email outbox (V24),** instead of the RabbitMQ email queue under "RabbitMQ Additional Uses":
 > notification emails are written to `email_outbox` by `Notifier` and sent by
@@ -4225,13 +4234,13 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3   CMD curl -f http://localh
 
 Response: `GET /actuator/health/liveness → { "status": "UP" }`
 
-**Why liveness and not the aggregate.** `/actuator/health` sums up every component, and
-`spring-boot-starter-amqp` contributes a `rabbit` indicator. With RabbitMQ unreachable the
-aggregate reports `DOWN` and the endpoint answers **503** — so a container health check pointed at
-it restarts a perfectly healthy API every time the broker blips. Liveness answers "is this process
-still working," ignores external dependencies, and is the correct signal for restart decisions.
-Keep the aggregate for dashboards and alerting, where "Rabbit is down" is exactly what you want to
-see.
+**Why liveness and not the aggregate.** `/actuator/health` sums up every component — today the
+database, disk space and ping; mail health is switched off (§25) and RabbitMQ is gone (§2). With
+Postgres unreachable the aggregate reports `DOWN` and the endpoint answers **503** — so a container
+health check pointed at it restarts a perfectly healthy API every time the database blips, which
+fixes nothing. Liveness answers "is this process still working," ignores external dependencies,
+and is the correct signal for restart decisions. Keep the aggregate for dashboards and alerting,
+where "the database is down" is exactly what you want to see.
 
 `management.endpoint.health.probes.enabled=true` makes the `liveness` and `readiness` groups exist
 outside Kubernetes, where Spring Boot would otherwise only enable them on detecting the platform.
@@ -4793,7 +4802,7 @@ once here rather than rediscovering per feature.
 Containers first, application second. The Spring Boot app does not start its own dependencies.
 
 ```bash
-docker compose up -d     # Postgres + RabbitMQ + pgAdmin
+docker compose up -d     # Postgres, pgAdmin, S3Mock, Mailpit
 docker ps                # confirm 0.0.0.0:5432->5432/tcp before continuing
 # then start the app
 ```
