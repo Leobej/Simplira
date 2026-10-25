@@ -19,6 +19,7 @@ public interface IssueRepository {
     IssuePage search(IssueFilter filter);
     List<Issue> findSubtasks(UUID parentId);
     List<Issue> findBySprintId(UUID sprintId);
+    List<Issue> findAllInProject(UUID projectId);
 
     // The next per-project issue number. The unique constraint is what settles a race.
     int nextNumber(UUID projectId);

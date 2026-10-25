@@ -1,5 +1,7 @@
 package io.github.leobej.infrastructure.persistence.postgres.adapter;
 
+import io.github.leobej.domain.model.audit.AuditAction;
+import io.github.leobej.domain.model.audit.AuditEntityType;
 import io.github.leobej.domain.model.audit.AuditEntry;
 import io.github.leobej.domain.model.audit.AuditPage;
 import io.github.leobej.domain.repository.AuditLogRepository;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -60,6 +63,25 @@ public class AuditLogRepositoryAdapter implements AuditLogRepository {
     public AuditPage findByIssue(UUID issueId, int page, int pageSize) {
         return toPage(jpaRepository.findByIssueIdOrderByCreatedAtDesc(issueId, PageRequest.of(page, pageSize)),
                 page, pageSize);
+    }
+
+    @Override
+    public List<AuditEntry> findIssueStatusHistory(UUID projectId) {
+        return jpaRepository.findByProjectIdAndEntityTypeAndActionInOrderByCreatedAt(projectId, AuditEntityType.ISSUE,
+                        List.of(AuditAction.CREATED, AuditAction.STATUS_CHANGED, AuditAction.ISSUE_CLOSED))
+                .stream().map(this::toDomain).toList();
+    }
+
+    @Override
+    public List<AuditEntry> findSprintClosures(UUID projectId) {
+        return jpaRepository.findByProjectIdAndEntityTypeAndActionInOrderByCreatedAt(projectId, AuditEntityType.SPRINT,
+                        List.of(AuditAction.SPRINT_CLOSED))
+                .stream().map(this::toDomain).toList();
+    }
+
+    @Override
+    public List<UUID> findIssuesCarriedOutOf(UUID sprintId) {
+        return jpaRepository.findIssuesCarriedOutOf(sprintId.toString());
     }
 
     private AuditPage toPage(Page<AuditLogEntity> result, int page, int pageSize) {

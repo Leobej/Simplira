@@ -165,6 +165,13 @@ public class IssueRepositoryAdapter implements IssueRepository {
     }
 
     @Override
+    public List<Issue> findAllInProject(UUID projectId) {
+        return jpaRepository.findByProjectIdAndDeletedAtIsNull(projectId).stream()
+                .map(IssueEntityMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public int nextNumber(UUID projectId) {
         return jpaRepository.maxNumber(projectId) + 1;
     }

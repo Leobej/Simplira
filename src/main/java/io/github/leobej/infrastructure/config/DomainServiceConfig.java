@@ -37,6 +37,7 @@ import io.github.leobej.domain.service.AuditLogService;
 import io.github.leobej.domain.service.AuditTrail;
 import io.github.leobej.domain.service.AuthService;
 import io.github.leobej.domain.service.BlockedFlagSync;
+import io.github.leobej.domain.service.ChartService;
 import io.github.leobej.domain.service.CommentService;
 import io.github.leobej.domain.service.EmailOutboxDispatcher;
 import io.github.leobej.domain.service.EmailVerificationService;
@@ -62,6 +63,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Clock;
 import java.time.Duration;
 
 // Domain services stay framework-free, so their beans are declared here instead of
@@ -327,6 +329,17 @@ public class DomainServiceConfig {
                                                AuditTrail auditTrail) {
         return new AttachmentService(attachmentRepository, issueRepository, projectAuthorization, fileStorage,
                 contentTypeDetector, auditTrail);
+    }
+
+    // UTC: chart days are UTC days, whatever the server's own zone.
+    @Bean
+    public ChartService chartService(IssueRepository issueRepository,
+                                     SprintRepository sprintRepository,
+                                     IssueStatusRepository issueStatusRepository,
+                                     AuditLogRepository auditLogRepository,
+                                     ProjectAuthorization projectAuthorization) {
+        return new ChartService(issueRepository, sprintRepository, issueStatusRepository, auditLogRepository,
+                projectAuthorization, Clock.systemUTC());
     }
 
     @Bean

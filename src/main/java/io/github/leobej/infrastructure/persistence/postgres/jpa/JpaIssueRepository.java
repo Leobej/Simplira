@@ -25,6 +25,8 @@ public interface JpaIssueRepository extends JpaRepository<IssueEntity, UUID>,
 
     List<IssueEntity> findBySprintIdAndDeletedAtIsNull(UUID sprintId);
 
+    List<IssueEntity> findByProjectIdAndDeletedAtIsNull(UUID projectId);
+
     long countByStatusIdAndDeletedAtIsNull(UUID statusId);
 
     long countByTypeIdAndDeletedAtIsNull(UUID typeId);

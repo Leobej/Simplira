@@ -14,6 +14,7 @@ import io.github.leobej.shared.exception.AttachmentNotFoundException;
 import io.github.leobej.shared.exception.EmailNotVerifiedException;
 import io.github.leobej.shared.exception.InvalidAttachmentException;
 import io.github.leobej.shared.exception.InvalidCurrentPasswordException;
+import io.github.leobej.shared.exception.InvalidDateRangeException;
 import io.github.leobej.shared.exception.InvalidResetTokenException;
 import io.github.leobej.shared.exception.InvalidVerificationTokenException;
 import io.github.leobej.shared.exception.IssueNotFoundException;
@@ -262,6 +263,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleInvalidVerificationToken(InvalidVerificationTokenException ex) {
         return ApiResponse.failure(ErrorResponse.of("INVALID_VERIFICATION_TOKEN", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidDateRangeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidDateRange(InvalidDateRangeException ex) {
+        return ApiResponse.failure(ErrorResponse.of("INVALID_DATE_RANGE", ex.getMessage()));
     }
 
     @ExceptionHandler(InvalidResetTokenException.class)
